@@ -35,7 +35,8 @@ catkin_package(
   CATKIN_DEPENDS message_runtime
 )
 
-install(PROGRAMS
+catkin_install_python(PROGRAMS
+  scripts/sentor_client.py
   scripts/sentor_node.py
   scripts/topic_mapping_node.py
   scripts/test.py

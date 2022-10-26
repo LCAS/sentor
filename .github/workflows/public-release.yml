@@ -1,23 +1,19 @@
+name: Internal release
 on:
   push:
     branches:
       - master
     tags:
       - 'v?[0-9]+.[0-9]+.[0-9]+'
-  workflow_dispatch:
-    inputs:
-      disable_checks:
-        description: Disable pre-release checks
-        required: false
-        default: false
-        type: boolean
-        
+
 jobs:
   release:
-    uses: SAGARobotics/SagaWorkflows/.github/workflows/release.yml@v2.1
+    uses: SAGARobotics/SagaWorkflows/.github/workflows/ci.yml@v3.4
     with:
       runs-on: '["ubuntu-latest"]'
-      disable-checks: ${{ github.event.inputs.disable_checks }}
+      release: 'true'
+      release-type: 'public'
+      distribution: 'noetic'
     secrets:
       pat-token: ${{ secrets.CI_PAT_PUBLIC }}
       repo-user: ${{ secrets.SAGA_REPO_PUBLIC_WRITE_USER }}

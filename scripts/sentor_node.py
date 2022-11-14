@@ -38,7 +38,8 @@ class sentor(object):
         self.topic_monitors_all = []
         
         config_file = rospy.get_param("~config_file", "")
-        tags = rospy.get_param("~topic_tags", [])
+        tags = rospy.get_param("~topic_tags", "")
+        tags = tags.split(",")
         
         if config_file:
             self.load_topics(config_file, tags)

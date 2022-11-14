@@ -7,7 +7,7 @@
   <arg name="safety_pub_rate" default="10.0"/>
   <arg name="independent_tags" default="false"/>
   <arg name="auto_topic" default="auto_mode"/>
-  <arg name="topic_tags" default="[]"/>
+  <arg name="topic_tags" default=""/>
 
 
   <node pkg="sentor" type="sentor_node.py" name="sentor" output="screen">
@@ -17,7 +17,7 @@
     <param name="~safety_pub_rate" value="$(arg safety_pub_rate)" />
     <param name="~independent_tags" value="$(arg independent_tags)" />
     <param name="~auto_topic" value="$(arg auto_topic)" />
-    <rosparam param="topic_tags" subst_value="True">$(arg topic_tags)</rosparam>
+    <param name="~topic_tags" value="$(arg topic_tags)" />
   </node>	
 
 </launch>

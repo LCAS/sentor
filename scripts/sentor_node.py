@@ -36,6 +36,7 @@ class sentor(object):
         self.topics = []
         self.topic_monitors = []
         self.topic_monitors_all = []
+        self.tags_in_use = []
         
         config_file = rospy.get_param("~config_file", "")
         tags = rospy.get_param("~topic_tags", "")
@@ -117,6 +118,9 @@ class sentor(object):
                 default_notifications = topic['default_notifications']
             if 'topic_tags' in topic:
                 topic_tags = topic['topic_tags']
+                
+            if any(tag in topic_tags for tag in self.tags_in_use):
+                continue
     
             topic_monitor = TopicMonitor(topic_name, rate, N, signal_when, signal_lambdas, processes, 
                                          timeout, default_notifications, self.event_callback, topic_tags)
@@ -127,6 +131,8 @@ class sentor(object):
             self.safety_monitor.register_monitors(topic_monitor)
             self.autonomy_monitor.register_monitors(topic_monitor)
             self.multi_monitor.register_monitors(topic_monitor)
+            
+            self.tags_in_use.extend(topic_tags)
             
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:

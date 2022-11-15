@@ -55,18 +55,22 @@ class sentor(object):
         rospy.spin()
         
         
-    def load_topics(self, config_file, tags=[]):
+    def load_topics(self, config_file, requested_tags=[]):
         self.topics = []
+        self.current_tags = []
         
         try:
             items = [yaml.load(open(item, 'r')) for item in config_file.split(',')]
             self.topics = [item for sublist in items for item in sublist]
             
-            if tags and tags[0]:
+            if requested_tags and requested_tags[0]:
                 filtered_topics = []
                 for topic in self.topics:
-                    if "topic_tags" in topic and any(tag in topic["topic_tags"] for tag in tags):
-                        filtered_topics.append(topic)
+                    if "topic_tags" in topic:
+                        for tag in set(requested_tags):
+                            if tag in topic["topic_tags"]:
+                                filtered_topics.append(topic)
+                                self.current_tags.append(tag)
 
                 self.topics = filtered_topics
             
@@ -92,6 +96,13 @@ class sentor(object):
             except Exception:
                 rospy.logerr("topic name is not specified for entry %s" % topic)
                 continue
+
+            topic_tags = []
+            if 'topic_tags' in topic:
+                topic_tags = topic['topic_tags']
+                
+            if any(tag in topic_tags for tag in self.tags_in_use):
+                continue
     
             rate = 0
             N = 0
@@ -100,7 +111,6 @@ class sentor(object):
             processes = []
             timeout = 0
             default_notifications = True
-            topic_tags = []
             
             if 'rate' in topic:
                 rate = topic['rate']
@@ -116,11 +126,6 @@ class sentor(object):
                 timeout = topic['timeout']
             if 'default_notifications' in topic:
                 default_notifications = topic['default_notifications']
-            if 'topic_tags' in topic:
-                topic_tags = topic['topic_tags']
-                
-            if any(tag in topic_tags for tag in self.tags_in_use):
-                continue
     
             topic_monitor = TopicMonitor(topic_name, rate, N, signal_when, signal_lambdas, processes, 
                                          timeout, default_notifications, self.event_callback, topic_tags)
@@ -132,7 +137,8 @@ class sentor(object):
             self.autonomy_monitor.register_monitors(topic_monitor)
             self.multi_monitor.register_monitors(topic_monitor)
             
-            self.tags_in_use.extend(topic_tags)
+        self.tags_in_use.extend(self.current_tags)
+        self.tags_in_use = list(set(self.tags_in_use))
             
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:

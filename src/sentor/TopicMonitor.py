@@ -112,7 +112,7 @@ class TopicMonitor(Thread):
                     if self.signal_when_cfg["signal_when"].lower() == 'not published':
                         self.execute(process_indices=self.signal_when_cfg["process_indices"])
                     
-            rospy.sleep(1.0)
+            rospy.sleep(self.signal_when_cfg["timeout"])
             
 
         # if rate > 0 set in config then throttle topic at that rate

@@ -90,19 +90,29 @@ class TopicMonitor(Thread):
     def _instantiate_monitors(self):
         if self.is_instantiated: return True
 
-        try:
-            msg_class, real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
-            topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
-        except rostopic.ROSTopicException as e:
-            self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
-            return False
+        real_topic = None
+        _set = False
+        while real_topic is None:
+            
+            try:
+                msg_class, real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
+                topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
+            except rostopic.ROSTopicException as e:
+                self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
+                real_topic = None
+    
+            if real_topic is None:
+                if not _set and not self.signal_when_cfg["repeat_exec"]:
+                    self.set_not_published(_exec=False)
+                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
+                    _set = True
+                elif self.signal_when_cfg["repeat_exec"]:
+                    self.set_not_published(_exec=False)
+                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
+                    
+            rospy.sleep(self.signal_when_cfg["timeout"])
+            
 
-        if real_topic is None:
-            self.event_callback("Topic %s is not published" % self.topic_name, "warn")
-            if self.signal_when_cfg["signal_when"].lower() == 'not published' and self.signal_when_cfg["safety_critical"]:
-                self.signal_when_is_safe = False
-            return False
-        
         # if rate > 0 set in config then throttle topic at that rate
         if self.rate > 0:
             _id = "".join(str(uuid.uuid4()).split("-"))
@@ -330,8 +340,25 @@ class TopicMonitor(Thread):
         rospy.Subscriber(subscribed_topic, msg_class, cb)
 
         return _filter
+    
+    
+    def set_not_published(self, _exec=True):
         
-
+        if self.signal_when_cfg["signal_when"].lower() == 'not published':
+            self.conditions[self.signal_when_cfg["signal_when"]]["satisfied"] = True
+            
+            if self.signal_when_cfg["safety_critical"]:
+                self.signal_when_is_safe = False
+            if self.signal_when_cfg["autonomy_critical"]:
+                self.signal_when_is_auto = False
+            if self.signal_when_cfg["default_notifications"] and self.signal_when_cfg["safety_critical"]:
+                self.event_callback("SAFETY CRITICAL: Topic %s is not published anymore" % self.topic_name, "error")
+            elif self.signal_when_cfg["default_notifications"]:
+                self.event_callback("Topic %s is not published anymore" % self.topic_name, "warn")
+            if _exec and not self.signal_when_cfg["repeat_exec"]:
+                self.execute(process_indices=self.signal_when_cfg["process_indices"])
+        
+        
     def run(self):
         # if the topic was not published initially then no monitor is running
         # but, maybe now it is published
@@ -342,19 +369,7 @@ class TopicMonitor(Thread):
                 self.is_instantiated = True
                 
         def cb(_):
-            if self.signal_when_cfg["signal_when"].lower() == 'not published':
-                self.conditions[self.signal_when_cfg["signal_when"]]["satisfied"] = True
-                
-                if self.signal_when_cfg["safety_critical"]:
-                    self.signal_when_is_safe = False
-                if self.signal_when_cfg["autonomy_critical"]:
-                    self.signal_when_is_auto = False
-                if self.signal_when_cfg["default_notifications"] and self.signal_when_cfg["safety_critical"]:
-                    self.event_callback("SAFETY CRITICAL: Topic %s is not published anymore" % self.topic_name, "error")
-                elif self.signal_when_cfg["default_notifications"]:
-                    self.event_callback("Topic %s is not published anymore" % self.topic_name, "warn")
-                if not self.signal_when_cfg["repeat_exec"]:
-                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
+            self.set_not_published()
 
         def repeat_cb(_):
             if self.signal_when_cfg["signal_when"].lower() == 'not published':

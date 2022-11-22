@@ -102,15 +102,11 @@ class TopicMonitor(Thread):
                 real_topic = None
     
             if real_topic is None:
-                if not _set and not self.signal_when_cfg["repeat_exec"]:
+                if not _set:
                     self.set_not_published(_exec=False)
                     if self.signal_when_cfg["signal_when"].lower() == 'not published':
                         self.execute(process_indices=self.signal_when_cfg["process_indices"])
                     _set = True
-                elif self.signal_when_cfg["repeat_exec"]:
-                    self.set_not_published(_exec=False)
-                    if self.signal_when_cfg["signal_when"].lower() == 'not published':
-                        self.execute(process_indices=self.signal_when_cfg["process_indices"])
                     
             rospy.sleep(0.1)
             

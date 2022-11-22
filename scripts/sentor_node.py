@@ -60,7 +60,7 @@ class sentor(object):
         self.current_tags = []
         
         try:
-            items = [yaml.load(open(item, 'r')) for item in config_file.split(',')]
+            items = [yaml.safe_load(open(item, 'r')) for item in config_file.split(',')]
             self.topics = [item for sublist in items for item in sublist]
             
             if requested_tags and requested_tags[0]:

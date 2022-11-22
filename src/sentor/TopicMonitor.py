@@ -107,8 +107,6 @@ class TopicMonitor(Thread):
                     if self.signal_when_cfg["signal_when"].lower() == 'not published':
                         self.execute(process_indices=self.signal_when_cfg["process_indices"])
                     _set = True
-
-            if real_topic is None:        
                 rospy.sleep(0.1)
             
 

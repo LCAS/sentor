@@ -193,8 +193,8 @@ Changelog for package sentor
   Added myself as a maintainer/author in the package xml.
 * Contributors: Adam Binch, MikHut, adambinch, francescodelduchetto, yiannis88
 
-Forthcoming
------------
+2.2.1 (2022-11-23)
+------------------
 * Merge pull request `#9 <https://github.com/SAGARobotics/sentor/issues/9>`_ from SAGARobotics/baardkrk/ci-release-workflows
   Release workflows for Noetic
 * Merge pull request `#11 <https://github.com/SAGARobotics/sentor/issues/11>`_ from SAGARobotics/adambinch/sentor-devel

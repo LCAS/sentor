@@ -8,6 +8,7 @@ Created on Fri Jul  1 09:25:27 2022
 ###################################################################################################################
 import rospy, sys
 from sentor.srv import Client, ClientRequest
+from threading import Lock
 
 
 def usage():
@@ -23,6 +24,7 @@ def usage():
     
     
 def sentor_client(mode, config, tags):
+    lock = Lock()
     
     rospy.wait_for_service(mode, timeout=5.0)
     try:
@@ -30,7 +32,8 @@ def sentor_client(mode, config, tags):
         req = ClientRequest()
         req.config = config
         req.topic_tags = tags
-        resp = s.call(req)
+        with lock:
+            resp = s.call(req)
         rospy.loginfo(resp)
     except rospy.ServiceException as e:
         print("Service call failed: {}".format(e))

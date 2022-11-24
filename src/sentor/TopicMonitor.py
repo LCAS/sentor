@@ -104,12 +104,11 @@ class TopicMonitor(Thread):
                 self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
                 self.real_topic = None
     
-            if self.real_topic is None:
-                if not _set:
-                    self.set_not_published(_exec=False)
-                    if self.signal_when_cfg["signal_when"].lower() == 'not published':
-                        self.execute(process_indices=self.signal_when_cfg["process_indices"])
-                    _set = True
+            if self.real_topic is None and not _set:
+                self.set_not_published(_exec=False)
+                if self.signal_when_cfg["signal_when"].lower() == 'not published':
+                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
+                _set = True
             rospy.sleep(0.1)
 
 
@@ -378,7 +377,7 @@ class TopicMonitor(Thread):
             while not self._stop_event.isSet():
 
                 if self.real_topic is not None and self.topic_finder_active:
-                    rospy.sleep(0.5) 
+                    rospy.sleep(0.3) 
                     self.topic_finder.join()
                     self.topic_finder_active = False
 

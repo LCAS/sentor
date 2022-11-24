@@ -83,32 +83,41 @@ class TopicMonitor(Thread):
         self.hz_monitor = None
         self.is_topic_published = True 
         self.is_instantiated = False
-        self.active = False
-        self.is_instantiated = self._instantiate_monitors()
+        self.active = True
+
+        self.real_topic = None
+        self.msg_class = None
+        self.topic_finder = Thread(target=self.get_topic)
+        self.topic_finder.start()
+        self.topic_finder_active = True
 
 
-    def _instantiate_monitors(self):
-        if self.is_instantiated: return True
+    def get_topic(self):
 
-        real_topic = None
         _set = False
-        while real_topic is None:
+        while self.real_topic is None:
             
             try:
-                msg_class, real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
+                self.msg_class, self.real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
                 topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
             except rostopic.ROSTopicException as e:
                 self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
-                real_topic = None
+                self.real_topic = None
     
-            if real_topic is None:
+            if self.real_topic is None:
                 if not _set:
                     self.set_not_published(_exec=False)
                     if self.signal_when_cfg["signal_when"].lower() == 'not published':
                         self.execute(process_indices=self.signal_when_cfg["process_indices"])
                     _set = True
-                rospy.sleep(0.1)
-            
+            rospy.sleep(0.1)
+
+
+    def _instantiate_monitors(self):
+        if self.is_instantiated: return True
+
+        real_topic = self.real_topic
+        msg_class = self.msg_class
 
         # if rate > 0 set in config then throttle topic at that rate
         if self.rate > 0:
@@ -179,8 +188,6 @@ class TopicMonitor(Thread):
             print("")
 
         self.is_instantiated = True
-        self.active = True
-
         return True
     
 
@@ -357,13 +364,6 @@ class TopicMonitor(Thread):
         
         
     def run(self):
-        # if the topic was not published initially then no monitor is running
-        # but, maybe now it is published
-        if not self.is_instantiated:
-            if not self._instantiate_monitors():
-                return
-            else:
-                self.is_instantiated = True
                 
         def cb(_):
             self.set_not_published()
@@ -376,6 +376,13 @@ class TopicMonitor(Thread):
         timer_repeat = None
         while not self._killed_event.isSet():
             while not self._stop_event.isSet():
+
+                if self.real_topic is not None and self.topic_finder_active:
+                    rospy.sleep(0.3) 
+                    self.topic_finder.join()
+
+                if self.real_topic is not None and not self.is_instantiated:
+                    self.is_instantiated = self._instantiate_monitors()
                 
                 self.thread_is_safe = self.signal_when_is_safe and self.lambdas_are_safe
                 if not self.independent_tags:

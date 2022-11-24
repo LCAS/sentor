@@ -170,14 +170,10 @@ class sentor(object):
         try:
             self.load_topics(req.config, req.topic_tags)
             self.instantiate()
-            rospy.sleep(0.3)
-            resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-            return True, resp
+            return True
         except Exception as e:
-            rospy.sleep(0.3)
             rospy.logerr(e)
-            resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-            return False, resp
+            return False
         
         
     def stop_monitoring(self, req):
@@ -191,12 +187,9 @@ class sentor(object):
             else:
                 monitor.stop_monitor()
                 success = True
-        
-        rospy.sleep(0.3)        
+           
         rospy.logwarn("sentor node stopped monitoring topics")
-        resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-        
-        return success, resp
+        return success
         
     
     def start_monitoring(self, req):
@@ -211,11 +204,8 @@ class sentor(object):
                 monitor.start_monitor()
                 success = True
         
-        rospy.sleep(0.3)
         rospy.logwarn("sentor node started monitoring topics")
-        resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-        
-        return success, resp
+        return success
     
     
     def __signal_handler(self, signum, frame):

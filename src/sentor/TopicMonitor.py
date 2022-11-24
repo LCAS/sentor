@@ -378,8 +378,9 @@ class TopicMonitor(Thread):
             while not self._stop_event.isSet():
 
                 if self.real_topic is not None and self.topic_finder_active:
-                    rospy.sleep(0.3) 
+                    rospy.sleep(0.5) 
                     self.topic_finder.join()
+                    self.topic_finder_active = False
 
                 if self.real_topic is not None and not self.is_instantiated:
                     self.is_instantiated = self._instantiate_monitors()

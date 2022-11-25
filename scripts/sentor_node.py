@@ -36,7 +36,7 @@ class sentor(object):
         self.topics = []
         self.topic_monitors = []
         self.topic_monitors_all = []
-        self.tags_in_use = []
+        self.tags_in_use = {}
         
         config_file = rospy.get_param("~config_file", "")
         tags = rospy.get_param("~topic_tags", "")
@@ -58,6 +58,7 @@ class sentor(object):
     def load_topics(self, config_file, requested_tags=[]):
         self.topics = []
         self.current_tags = []
+        self.config_file = config_file
         
         try:
             items = [yaml.safe_load(open(item, 'r')) for item in config_file.split(',')]
@@ -100,9 +101,10 @@ class sentor(object):
             topic_tags = []
             if 'topic_tags' in topic:
                 topic_tags = topic['topic_tags']
-                
-            if any(tag in topic_tags for tag in self.tags_in_use):
-                continue
+
+            if self.config_file in self.tags_in_use:    
+                if any(tag in topic_tags for tag in self.tags_in_use[self.config_file]):
+                    continue
     
             rate = 0
             N = 0
@@ -136,9 +138,11 @@ class sentor(object):
             self.safety_monitor.register_monitors(topic_monitor)
             self.autonomy_monitor.register_monitors(topic_monitor)
             self.multi_monitor.register_monitors(topic_monitor)
-            
-        self.tags_in_use.extend(self.current_tags)
-        self.tags_in_use = list(set(self.tags_in_use))
+
+        if self.config_file not in self.tags_in_use:
+            self.tags_in_use[self.config_file] = self.current_tags
+        else:
+            self.tags_in_use[self.config_file].extend(self.current_tags)
             
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:

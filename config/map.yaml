@@ -1,7 +1,8 @@
-- name: "/topic_name"
-  arg: "msg.data"
+- name: "/row_detector/health_monitor"
+  arg: "msg.lines_accepted.data"
   stat: "mean"
-  limits: [11.0, 25.0, -40.0, -8.0]
+  #limits: [11.0, 25.0, -40.0, -8.0]
+  map: "/home/adam/thorvald_ws/src/ThorvaldAutonomy/ThorvaldLaunch/thorvald_launch/config/site_files/riseholme/polytunnel/map.yaml"
   resolution: 1.5
 
 - name: "/topic_name"
@@ -9,3 +10,4 @@
   stat: "stdev"
   map: "/home/user/maps/map.yaml"
   resolution: 1.5
+  include: False

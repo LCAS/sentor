@@ -109,6 +109,9 @@ class TopicMonitor(Thread):
                 if self.signal_when_cfg["signal_when"].lower() == 'not published':
                     self.execute(process_indices=self.signal_when_cfg["process_indices"])
                 _set = True
+            elif self.real_topic is not None and not self.is_instantiated:
+                self.is_instantiated = self._instantiate_monitors()
+
             rospy.sleep(0.1)
 
 
@@ -376,13 +379,9 @@ class TopicMonitor(Thread):
         while not self._killed_event.isSet():
             while not self._stop_event.isSet():
 
-                if self.real_topic is not None and self.topic_finder_active:
-                    rospy.sleep(0.3) 
+                if self.is_instantiated and self.topic_finder_active:
                     self.topic_finder.join()
                     self.topic_finder_active = False
-
-                if self.real_topic is not None and not self.is_instantiated:
-                    self.is_instantiated = self._instantiate_monitors()
                 
                 self.thread_is_safe = self.signal_when_is_safe and self.lambdas_are_safe
                 if not self.independent_tags:

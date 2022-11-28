@@ -55,14 +55,15 @@ class TopicMonitor(Thread):
         
         self.independent_tags = rospy.get_param("~independent_tags", False)
         
-        self.signal_when_is_safe = True
-        self.lambdas_are_safe = True
         self.thread_is_safe = True
-        
-        self.signal_when_is_auto = True
-        self.lambdas_are_auto = True
         self.thread_is_auto = True
-        
+
+        self.signal_when_is_safe = True
+        self.signal_when_is_auto = True
+
+        self.lambdas_are_safe = True
+        self.lambdas_are_auto = True
+
         self.nodes = []
         self.sat_crit_expressions = []
         self.sat_auto_expressions = []
@@ -94,7 +95,16 @@ class TopicMonitor(Thread):
 
     def get_topic(self):
 
-        _set = False
+        def cb(_):
+            self.set_not_published()
+
+        def repeat_cb(_):
+            if self.signal_when_cfg["signal_when"].lower() == 'not published':
+                self.execute(process_indices=self.signal_when_cfg["process_indices"])
+
+
+        timer = None
+        timer_repeat = None
         while self.real_topic is None:
             
             try:
@@ -104,13 +114,23 @@ class TopicMonitor(Thread):
                 self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
                 self.real_topic = None
     
-            if self.real_topic is None and not _set:
-                self.set_not_published(_exec=False)
-                if self.signal_when_cfg["signal_when"].lower() == 'not published':
-                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
-                _set = True
-            elif self.real_topic is not None and not self.is_instantiated:
-                self.is_instantiated = self._instantiate_monitors()
+            if self.real_topic is None:
+                if timer is None:
+                    timer = rospy.Timer(rospy.Duration.from_sec(self.signal_when_cfg["timeout"]), cb, oneshot=True)
+                if self.signal_when_cfg["repeat_exec"] and timer_repeat is None:
+                    timer_repeat = rospy.Timer(rospy.Duration.from_sec(self.signal_when_cfg["timeout"]), repeat_cb, oneshot=False)
+
+            else:
+                if timer is not None:
+                    timer.shutdown()
+                    timer = None
+                        
+                if self.signal_when_cfg["repeat_exec"] and timer_repeat is not None:
+                    timer_repeat.shutdown()
+                    timer_repeat = None
+
+                if not self.is_instantiated:
+                    self.is_instantiated = self._instantiate_monitors()
 
             rospy.sleep(0.1)
 
@@ -170,8 +190,7 @@ class TopicMonitor(Thread):
             print("Signaling 'not published' for "+ bcolors.BOLD + str(self.signal_when_cfg["timeout"]) + " seconds" + bcolors.ENDC +" for " + bcolors.OKBLUE + self.topic_name + bcolors.ENDC +" initialized")
 
         if len(self.signal_lambdas_config):
-            print("Signaling expressions for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC + ":")
-            
+            self.print_lambdas()
             self.lambda_monitor_list = []
             for signal_lambda in self.signal_lambdas_config:
                 
@@ -179,7 +198,6 @@ class TopicMonitor(Thread):
                 lambda_config = self.process_lambda_config(signal_lambda)
                 
                 if lambda_fn_str != "":
-                    print("\t" + bcolors.OKGREEN + lambda_fn_str + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
                     lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, msg_class, lambda_fn_str, lambda_config)
 
                     # register cb that notifies when the lambda function is True
@@ -191,6 +209,16 @@ class TopicMonitor(Thread):
 
         self.is_instantiated = True
         return True
+
+
+    def print_lambdas(self):
+
+        print("Signaling expressions for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC + ":")
+        for signal_lambda in self.signal_lambdas_config:
+            lambda_fn_str = signal_lambda["expression"]
+            lambda_config = self.process_lambda_config(signal_lambda)
+            if lambda_fn_str != "":
+                print("\t" + bcolors.OKGREEN + lambda_fn_str + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
     
 
     def event_callback(self, string, type, msg=""):

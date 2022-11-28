@@ -23,16 +23,7 @@ class sentor(object):
     
     
     def __init__(self):
-        
-        self.safety_monitor = SafetyMonitor("safe_operation", "SAFE OPERATION", "thread_is_safe", "safety_critical", 
-                                            "set_safety_tag", self.event_callback)
-        self.autonomy_monitor = SafetyMonitor("pause_autonomous_operation", "SAFE AUTONOMOUS OPERATION", "thread_is_auto", 
-                                              "autonomy_critical", "set_autonomy_tag", self.event_callback, invert=True)
-        self.multi_monitor = MultiMonitor()
-        
-        self.event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
-        self.rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
-        
+
         self.topics = []
         self.topic_monitors = []
         self.topic_monitors_all = []
@@ -41,6 +32,15 @@ class sentor(object):
         config_file = rospy.get_param("~config_file", "")
         tags = rospy.get_param("~topic_tags", "")
         tags = tags.split(",")
+
+        self.event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
+        self.rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
+        
+        self.safety_monitor = SafetyMonitor("safe_operation", "SAFE OPERATION", "thread_is_safe", "safety_critical", 
+                                            "set_safety_tag", self.event_callback)
+        self.autonomy_monitor = SafetyMonitor("pause_autonomous_operation", "SAFE AUTONOMOUS OPERATION", "thread_is_auto", 
+                                              "autonomy_critical", "set_autonomy_tag", self.event_callback, invert=True)
+        self.multi_monitor = MultiMonitor()
         
         if config_file:
             self.load_topics(config_file, tags)

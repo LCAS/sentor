@@ -138,27 +138,24 @@ class TopicMonitor(Thread):
     def _instantiate_monitors(self):
         if self.is_instantiated: return True
 
-        real_topic = self.real_topic
-        msg_class = self.msg_class
-
         # if rate > 0 set in config then throttle topic at that rate
         if self.rate > 0:
             _id = "".join(str(uuid.uuid4()).split("-"))
             
             COMMAND_BASE = ["rosrun", "topic_tools", "throttle"]
-            subscribed_topic = "/sentor/monitoring/" + _id + real_topic
+            subscribed_topic = "/sentor/monitoring/" + _id + self.real_topic
             
-            command = COMMAND_BASE + ["messages", real_topic, str(self.rate), subscribed_topic]
+            command = COMMAND_BASE + ["messages", self.real_topic, str(self.rate), subscribed_topic]
             subprocess.Popen(command, stdout=open(os.devnull, "wb"))
         else:
-            subscribed_topic = real_topic
+            subscribed_topic = self.real_topic
 
         # find out topic publishing nodes
         master = rosgraph.Master(rospy.get_name())
         try:
             pubs, _ = rostopic.get_topic_list(master=master)
             # filter based on topic
-            pubs = [x for x in pubs if x[0] == real_topic]
+            pubs = [x for x in pubs if x[0] == self.real_topic]
             nodes = []
             for _, _, _nodes in pubs:
                 nodes += _nodes
@@ -176,11 +173,11 @@ class TopicMonitor(Thread):
                      hz_monitor_required = True
         
         if hz_monitor_required:
-            self.hz_monitor = self._instantiate_hz_monitor(subscribed_topic, self.topic_name, msg_class)
+            self.hz_monitor = self._instantiate_hz_monitor(subscribed_topic, self.topic_name, self.msg_class)
 
         if self.signal_when_cfg["signal_when"].lower() == 'published':
             print("Signaling 'published' for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC +" initialized")
-            self.pub_monitor = self._instantiate_pub_monitor(subscribed_topic, self.topic_name, msg_class)
+            self.pub_monitor = self._instantiate_pub_monitor(subscribed_topic, self.topic_name, self.msg_class)
             self.pub_monitor.register_published_cb(self.published_cb)
             
             if self.signal_when_cfg["safety_critical"]:
@@ -198,7 +195,7 @@ class TopicMonitor(Thread):
                 lambda_config = self.process_lambda_config(signal_lambda)
                 
                 if lambda_fn_str != "":
-                    lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, msg_class, lambda_fn_str, lambda_config)
+                    lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_fn_str, lambda_config)
 
                     # register cb that notifies when the lambda function is True
                     lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)

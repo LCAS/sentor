@@ -198,9 +198,7 @@ class TopicMonitor(Thread):
         print("")
         self.lambda_monitor_list = []
         for lambda_config in lambda_configs:
-
-            lambda_fn_str = lambda_config["expr"]
-            lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_fn_str, lambda_config)
+            lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_config["expr"], lambda_config)
 
             # register cb that notifies when the lambda function is True
             lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)

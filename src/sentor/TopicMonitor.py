@@ -106,14 +106,14 @@ class TopicMonitor(Thread):
         timer = None
         timer_repeat = None
         while self.real_topic is None:
-            
+    
             try:
                 self.msg_class, self.real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
                 topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
             except rostopic.ROSTopicException as e:
                 self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
                 self.real_topic = None
-    
+
             if self.real_topic is None:
                 if timer is None:
                     timer = rospy.Timer(rospy.Duration.from_sec(self.signal_when_cfg["timeout"]), cb, oneshot=True)
@@ -186,37 +186,31 @@ class TopicMonitor(Thread):
         elif self.signal_when_cfg["signal_when"].lower() == 'not published':
             print("Signaling 'not published' for "+ bcolors.BOLD + str(self.signal_when_cfg["timeout"]) + " seconds" + bcolors.ENDC +" for " + bcolors.OKBLUE + self.topic_name + bcolors.ENDC +" initialized")
 
+        lambda_configs = []
         if len(self.signal_lambdas_config):
-            self.print_lambdas()
-            self.lambda_monitor_list = []
+            print("Signaling expressions for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC + ":")
             for signal_lambda in self.signal_lambdas_config:
-                
-                lambda_fn_str = signal_lambda["expression"]
-                lambda_config = self.process_lambda_config(signal_lambda)
-                
-                if lambda_fn_str != "":
-                    lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_fn_str, lambda_config)
+                if signal_lambda["expression"] != "":
+                    lambda_config = self.process_lambda_config(signal_lambda)
+                    print("\t" + bcolors.OKGREEN + lambda_config["expr"] + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
+                    lambda_configs.append(lambda_config)
 
-                    # register cb that notifies when the lambda function is True
-                    lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)
-                    lambda_monitor.register_unsatisfied_cb(self.lambda_unsatisfied_cb)
+        print("")
+        self.lambda_monitor_list = []
+        for lambda_config in lambda_configs:
 
-                    self.lambda_monitor_list.append(lambda_monitor)
-            print("")
+            lambda_fn_str = lambda_config["expr"]
+            lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_fn_str, lambda_config)
+
+            # register cb that notifies when the lambda function is True
+            lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)
+            lambda_monitor.register_unsatisfied_cb(self.lambda_unsatisfied_cb)
+
+            self.lambda_monitor_list.append(lambda_monitor)
 
         self.is_instantiated = True
         return True
 
-
-    def print_lambdas(self):
-
-        print("Signaling expressions for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC + ":")
-        for signal_lambda in self.signal_lambdas_config:
-            lambda_fn_str = signal_lambda["expression"]
-            lambda_config = self.process_lambda_config(signal_lambda)
-            if lambda_fn_str != "":
-                print("\t" + bcolors.OKGREEN + lambda_fn_str + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
-    
 
     def event_callback(self, string, type, msg=""):
         self._event_callback(string, type, msg, self.nodes, self.topic_name)

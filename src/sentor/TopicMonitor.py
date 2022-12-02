@@ -125,7 +125,7 @@ class TopicMonitor(Thread):
                     timer.shutdown()
                     timer = None
                         
-                if self.signal_when_cfg["repeat_exec"] and timer_repeat is not None:
+                if timer_repeat is not None:
                     timer_repeat.shutdown()
                     timer_repeat = None
 

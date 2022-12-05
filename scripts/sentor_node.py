@@ -31,7 +31,6 @@ class sentor(object):
         
         config_file = rospy.get_param("~config_file", "")
         tags = rospy.get_param("~topic_tags", "")
-        tags = tags.split(",")
 
         self.event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
         self.rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
@@ -55,10 +54,12 @@ class sentor(object):
         rospy.spin()
         
         
-    def load_topics(self, config_file, requested_tags=[]):
+    def load_topics(self, config_file, requested_tags=""):
+
+        self.config_file = config_file
+        requested_tags = list(set(requested_tags.split(",")))
         self.topics = []
         self.current_tags = []
-        self.config_file = config_file
         
         try:
             items = [yaml.safe_load(open(item, 'r')) for item in config_file.split(',')]
@@ -68,7 +69,7 @@ class sentor(object):
                 filtered_topics = []
                 for topic in self.topics:
                     if "topic_tags" in topic:
-                        for tag in set(requested_tags):
+                        for tag in requested_tags:
                             if tag in topic["topic_tags"]:
                                 filtered_topics.append(topic)
                                 self.current_tags.append(tag)
@@ -181,11 +182,13 @@ class sentor(object):
         
         
     def stop_monitoring(self, req):
+
+        topic_tags = list(set(req.topic_tags.split(",")))
         
         success = False
         for monitor in self.topic_monitors_all:
-            if req.topic_tags and req.topic_tags[0]:
-                if any(tag in monitor.topic_tags for tag in req.topic_tags):
+            if topic_tags and topic_tags[0]:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitor.stop_monitor()
                     success = True
             else:
@@ -197,11 +200,13 @@ class sentor(object):
         
     
     def start_monitoring(self, req):
+
+        topic_tags = list(set(req.topic_tags.split(",")))
         
         success = False
         for monitor in self.topic_monitors_all:
-            if req.topic_tags and req.topic_tags[0]:
-                if any(tag in monitor.topic_tags for tag in req.topic_tags):
+            if topic_tags and topic_tags[0]:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitor.start_monitor()
                     success = True
             else:

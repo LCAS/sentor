@@ -75,6 +75,7 @@ class sentor(object):
                                 filtered_topics.append(topic)
                                 self.current_tags.append(tag)
 
+                self.current_tags = list(set(self.current_tags))
                 self.topics = filtered_topics
             
         except Exception as e:
@@ -145,6 +146,7 @@ class sentor(object):
             self.tags_in_use[self.config_file] = self.current_tags
         else:
             self.tags_in_use[self.config_file].extend(self.current_tags)
+        self.tags_in_use[self.config_file] = list(set(self.tags_in_use[self.config_file]))
             
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:
@@ -219,20 +221,24 @@ class sentor(object):
 
 
     def kill_monitors_cb(self, req):
-
         topic_tags = list(set(req.topic_tags.split(",")))
-        monitors_to_kill = []
-        success = False
-        if topic_tags and topic_tags[0]:
-            temp = copy.deepcopy(self.tags_in_use)
-            self.tags_in_use = {}
-            for key in temp:
-                self.tags_in_use[key] = [tag for tag in temp[key] if tag not in topic_tags]
 
+        success = False
+        monitors_to_kill = []
+        tags_to_kill = []
+
+        if topic_tags and topic_tags[0]:
             for monitor in self.topic_monitors_all:
                 if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitors_to_kill.append(monitor)
+                    tags_to_kill.extend(monitor.topic_tags)
                     success = True
+
+            temp = copy.deepcopy(self.tags_in_use)
+            self.tags_in_use = {}
+            for key in temp:
+                self.tags_in_use[key] = [tag for tag in temp[key] if tag not in tags_to_kill]
+
         else:
             self.tags_in_use = {}
             monitors_to_kill = self.topic_monitors_all
@@ -240,12 +246,12 @@ class sentor(object):
 
         self.kill_monitors(monitors_to_kill)
 
+        N = len(self.topic_monitors_all)
+        self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
+
         self.safety_monitor.topic_monitors = []
         self.autonomy_monitor.topic_monitors = []
         self.multi_monitor.topic_monitors = []
-        
-        N = len(self.topic_monitors_all)
-        self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
 
         for topic_monitor in self.topic_monitors_all:
             self.safety_monitor.register_monitors(topic_monitor)

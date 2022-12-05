@@ -5,7 +5,7 @@
 """
 ##########################################################################################
 from __future__ import division
-import signal, rospy, yaml, os
+import signal, rospy, yaml, os, copy
 
 from sentor.TopicMonitor import TopicMonitor
 from sentor.SafetyMonitor import SafetyMonitor
@@ -224,11 +224,17 @@ class sentor(object):
         monitors_to_kill = []
         success = False
         if topic_tags and topic_tags[0]:
+            temp = copy.deepcopy(self.tags_in_use)
+            self.tags_in_use = {}
+            for key in temp:
+                self.tags_in_use[key] = [tag for tag in temp[key] if tag not in topic_tags]
+
             for monitor in self.topic_monitors_all:
                 if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitors_to_kill.append(monitor)
                     success = True
         else:
+            self.tags_in_use = {}
             monitors_to_kill = self.topic_monitors_all
             success = True
 
@@ -240,6 +246,7 @@ class sentor(object):
         
         N = len(self.topic_monitors_all)
         self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
+
         for topic_monitor in self.topic_monitors_all:
             self.safety_monitor.register_monitors(topic_monitor)
             self.autonomy_monitor.register_monitors(topic_monitor)

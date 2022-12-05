@@ -234,10 +234,10 @@ class sentor(object):
                     tags_to_kill.extend(monitor.topic_tags)
                     success = True
 
-            temp = copy.deepcopy(self.tags_in_use)
+            old_tags = copy.deepcopy(self.tags_in_use)
             self.tags_in_use = {}
-            for key in temp:
-                self.tags_in_use[key] = [tag for tag in temp[key] if tag not in tags_to_kill]
+            for key in old_tags:
+                self.tags_in_use[key] = [tag for tag in old_tags[key] if tag not in tags_to_kill]
 
         else:
             monitors_to_kill = self.topic_monitors_all

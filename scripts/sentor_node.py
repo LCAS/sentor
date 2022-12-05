@@ -240,8 +240,8 @@ class sentor(object):
                 self.tags_in_use[key] = [tag for tag in temp[key] if tag not in tags_to_kill]
 
         else:
-            self.tags_in_use = {}
             monitors_to_kill = self.topic_monitors_all
+            self.tags_in_use = {}
             success = True
 
         self.kill_monitors(monitors_to_kill)

@@ -48,6 +48,7 @@ class sentor(object):
         rospy.Service('/sentor/load_monitors', Client, self.load_monitors)
         rospy.Service('/sentor/stop_monitors', Client, self.stop_monitoring)
         rospy.Service('/sentor/start_monitors', Client, self.start_monitoring)
+        rospy.Service('/sentor/kill_monitors', Client, self.kill_monitors_cb)
         
         signal.signal(signal.SIGINT, self.__signal_handler)
         
@@ -215,24 +216,52 @@ class sentor(object):
         
         rospy.logwarn("sentor node started monitoring topics")
         return success
-    
-    
+
+
+    def kill_monitors_cb(self, req):
+
+        topic_tags = list(set(req.topic_tags.split(",")))
+        monitors_to_kill = []
+        success = False
+        if topic_tags and topic_tags[0]:
+            for monitor in self.topic_monitors_all:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
+                    monitors_to_kill.append(monitor)
+                    success = True
+        else:
+            monitors_to_kill = self.topic_monitors_all
+            success = True
+
+        self.kill_monitors(monitors_to_kill)
+
+        self.safety_monitor.topic_monitors = []
+        self.autonomy_monitor.topic_monitors = []
+        self.multi_monitor.topic_monitors = []
+        
+        N = len(self.topic_monitors_all)
+        self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
+        for topic_monitor in self.topic_monitors_all:
+            self.safety_monitor.register_monitors(topic_monitor)
+            self.autonomy_monitor.register_monitors(topic_monitor)
+            self.multi_monitor.register_monitors(topic_monitor)
+
+        rospy.logwarn("sentor node killed {} monitors".format(N-len(self.topic_monitors_all)))
+        return success
+
+        
+    def kill_monitors(self, topic_monitors):
+        for topic_monitor in topic_monitors:
+            topic_monitor.kill_monitor()
+            topic_monitor.join()
+
+
     def __signal_handler(self, signum, frame):
 
-        def kill_monitors():
-            for topic_monitor in self.topic_monitors:
-                topic_monitor.kill_monitor()
+        self.safety_monitor.stop_monitor()
+        self.autonomy_monitor.stop_monitor()
+        self.multi_monitor.stop_monitor()
     
-            self.safety_monitor.stop_monitor()
-            self.autonomy_monitor.stop_monitor()
-            self.multi_monitor.stop_monitor()
-    
-        def join_monitors():
-            for topic_monitor in self.topic_monitors:
-                topic_monitor.join()
-    
-        kill_monitors()
-        join_monitors()
+        self.kill_monitors(self.topic_monitors_all)
         print("stopped.")
         os._exit(signal.SIGTERM)
 ##########################################################################################

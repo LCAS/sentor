@@ -221,8 +221,8 @@ class sentor(object):
 
 
     def kill_monitors_cb(self, req):
+        
         topic_tags = list(set(req.topic_tags.split(",")))
-
         success = False
         monitors_to_kill = []
         tags_to_kill = []

@@ -254,8 +254,11 @@ class sentor(object):
 
         
     def kill_monitors(self, topic_monitors):
+
         for topic_monitor in topic_monitors:
             topic_monitor.kill_monitor()
+
+        for topic_monitor in topic_monitors:
             topic_monitor.join()
 
 

@@ -74,9 +74,8 @@ class sentor(object):
                             if tag in topic["topic_tags"]:
                                 filtered_topics.append(topic)
                                 self.current_tags.append(tag)
-
-                self.current_tags = list(set(self.current_tags))
                 self.topics = filtered_topics
+                self.current_tags = list(set(self.current_tags))
             
         except Exception as e:
             rospy.logerr("Error loading configuration file: {}".format(e))
@@ -146,8 +145,10 @@ class sentor(object):
             self.tags_in_use[self.config_file] = self.current_tags
         else:
             self.tags_in_use[self.config_file].extend(self.current_tags)
-        self.tags_in_use[self.config_file] = list(set(self.tags_in_use[self.config_file]))
             
+        tags = list(set(self.tags_in_use[self.config_file])) 
+        self.tags_in_use[self.config_file] = tags
+           
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:
             topic_monitor.start()
@@ -238,27 +239,17 @@ class sentor(object):
             self.tags_in_use = {}
             for key in old_tags:
                 self.tags_in_use[key] = [tag for tag in old_tags[key] if tag not in tags_to_kill]
-
         else:
             monitors_to_kill = self.topic_monitors_all
             self.tags_in_use = {}
             success = True
 
         self.kill_monitors(monitors_to_kill)
-
-        N = len(self.topic_monitors_all)
         self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
 
-        self.safety_monitor.topic_monitors = []
-        self.autonomy_monitor.topic_monitors = []
-        self.multi_monitor.topic_monitors = []
+        self.init_monitors(self.topic_monitors_all)
 
-        for topic_monitor in self.topic_monitors_all:
-            self.safety_monitor.register_monitors(topic_monitor)
-            self.autonomy_monitor.register_monitors(topic_monitor)
-            self.multi_monitor.register_monitors(topic_monitor)
-
-        rospy.logwarn("sentor node killed {} monitors".format(N-len(self.topic_monitors_all)))
+        rospy.logwarn("sentor node killed monitors")
         return success
 
         
@@ -266,6 +257,18 @@ class sentor(object):
         for topic_monitor in topic_monitors:
             topic_monitor.kill_monitor()
             topic_monitor.join()
+
+
+    def init_monitors(self, topic_monitors):
+
+        self.safety_monitor.topic_monitors = []
+        self.autonomy_monitor.topic_monitors = []
+        self.multi_monitor.topic_monitors = []
+
+        for topic_monitor in topic_monitors:
+            self.safety_monitor.register_monitors(topic_monitor)
+            self.autonomy_monitor.register_monitors(topic_monitor)
+            self.multi_monitor.register_monitors(topic_monitor)
 
 
     def __signal_handler(self, signum, frame):

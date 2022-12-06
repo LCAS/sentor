@@ -198,8 +198,9 @@ class sentor(object):
             else:
                 monitor.stop_monitor()
                 success = True
-           
-        rospy.logwarn("sentor node stopped monitoring topics")
+
+        if success:   
+            rospy.logwarn("sentor node stopped monitoring topics")
         return success
         
     
@@ -217,7 +218,8 @@ class sentor(object):
                 monitor.start_monitor()
                 success = True
         
-        rospy.logwarn("sentor node started monitoring topics")
+        if success:
+            rospy.logwarn("sentor node started monitoring topics")
         return success
 
 
@@ -249,7 +251,8 @@ class sentor(object):
 
         self.init_monitors(self.topic_monitors_all)
 
-        rospy.logwarn("sentor node killed monitors with tags '{}'".format(req.topic_tags))
+        if success:
+            rospy.logwarn("sentor node killed monitors with topic tags '{}'".format(req.topic_tags))
         return success
 
         

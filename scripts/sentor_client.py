@@ -71,7 +71,7 @@ if __name__ == "__main__":
     rospy.init_node("sentor_client", anonymous=True)
 
     args = parser.parse_args()
-    if args.mode == "load" and args.config is None:
+    if args.mode == "load" and not args.config:
         rospy.logerr("--config CONFIG  (str) sentor config file. Required if mode=load.")
         sys.exit(1)
 

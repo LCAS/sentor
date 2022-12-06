@@ -249,7 +249,7 @@ class sentor(object):
 
         self.init_monitors(self.topic_monitors_all)
 
-        rospy.logwarn("sentor node killed monitors")
+        rospy.logwarn("sentor node killed monitors with tags '{}'".format(req.topic_tags))
         return success
 
         

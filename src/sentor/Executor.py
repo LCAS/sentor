@@ -371,7 +371,6 @@ class Executor(object):
             indices = process_indices
         
         for index in indices:
-            rospy.sleep(0.1) # needed when using slackeros
             
             process = self.processes[index]
             if process == "not_initialised":

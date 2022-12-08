@@ -540,7 +540,6 @@ class TopicMonitor(Thread):
             
     def execute(self, msg=None, process_indices=None):
         if self.processes:
-            rospy.sleep(0.1) # needed when using slackeros
             self.executor.execute(msg, process_indices)
             
             

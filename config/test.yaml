@@ -7,6 +7,7 @@
     timeout: 1.0
     safety_critical: True
     process_indices: [0]
+    repeat_exec: True
     tags: ["expression 1"]
   signal_lambdas:
   - expression: "lambda msg : msg.data == False"

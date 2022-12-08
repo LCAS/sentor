@@ -18,18 +18,6 @@ class SafetyMonitor(object):
     
     def __init__(self, topic, event_msg, attr, crit_key, srv, event_cb, invert=False):
         
-        timeout = rospy.get_param("~safe_operation_timeout", 10.0)
-        rate = rospy.get_param("~safety_pub_rate", 10.0)
-        self.auto_tagging = rospy.get_param("~auto_safety_tagging", True)
-        
-        auto_topic = rospy.get_param("~auto_topic", "auto_mode")
-        auto_topic = "/" + auto_topic if auto_topic[0] != "/" else auto_topic
-
-        if timeout > 0:
-            self.timeout = timeout
-        else:
-            self.timeout = 0.1
-        
         self.event_msg = event_msg + ": "
         self.attr = attr
         self.crit_key = crit_key
@@ -46,6 +34,21 @@ class SafetyMonitor(object):
         self.auto = False
         
         self._stop_event = Event()
+
+        timeout = rospy.get_param("~safe_operation_timeout", 10.0)
+        rate = rospy.get_param("~safety_pub_rate", 10.0)
+        self.auto_tagging = rospy.get_param("~auto_safety_tagging", True)
+        
+        auto_topic = rospy.get_param("~auto_topic", "auto_mode")
+        auto_topic = "/" + auto_topic if auto_topic[0] != "/" else auto_topic
+
+        if timeout > 0:
+            self.timeout = timeout
+        else:
+            self.timeout = 0.1
+
+        self.event_cb(self.event_msg + "FALSE", "error")
+        self.unsafe_msg_sent = True
         
         _, real_topic, _ = rostopic.get_topic_class(auto_topic, blocking=False)
         if real_topic is not None:

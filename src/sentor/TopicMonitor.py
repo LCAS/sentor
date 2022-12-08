@@ -55,14 +55,15 @@ class TopicMonitor(Thread):
         
         self.independent_tags = rospy.get_param("~independent_tags", False)
         
-        self.signal_when_is_safe = True
-        self.lambdas_are_safe = True
         self.thread_is_safe = True
-        
-        self.signal_when_is_auto = True
-        self.lambdas_are_auto = True
         self.thread_is_auto = True
-        
+
+        self.signal_when_is_safe = True
+        self.signal_when_is_auto = True
+
+        self.lambdas_are_safe = True
+        self.lambdas_are_auto = True
+
         self.nodes = []
         self.sat_crit_expressions = []
         self.sat_auto_expressions = []
@@ -83,44 +84,78 @@ class TopicMonitor(Thread):
         self.hz_monitor = None
         self.is_topic_published = True 
         self.is_instantiated = False
-        self.active = False
-        self.is_instantiated = self._instantiate_monitors()
+        self.active = True
+
+        self.real_topic = None
+        self.msg_class = None
+        self.topic_finder = Thread(target=self.get_topic)
+        self.topic_finder.start()
+        self.topic_finder_active = True
+
+
+    def get_topic(self):
+
+        def cb(_):
+            self.set_not_published()
+
+        def repeat_cb(_):
+            if self.signal_when_cfg["signal_when"].lower() == 'not published':
+                self.execute(process_indices=self.signal_when_cfg["process_indices"])
+
+
+        timer = None
+        timer_repeat = None
+        while self.real_topic is None:
+    
+            try:
+                self.msg_class, self.real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
+                topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
+            except rostopic.ROSTopicException as e:
+                self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
+                self.real_topic = None
+
+            if self.real_topic is None:
+                if timer is None:
+                    timer = rospy.Timer(rospy.Duration.from_sec(self.signal_when_cfg["timeout"]), cb, oneshot=True)
+                if self.signal_when_cfg["repeat_exec"] and timer_repeat is None:
+                    timer_repeat = rospy.Timer(rospy.Duration.from_sec(self.signal_when_cfg["timeout"]), repeat_cb, oneshot=False)
+
+            else:
+                if timer is not None:
+                    timer.shutdown()
+                    timer = None
+                        
+                if timer_repeat is not None:
+                    timer_repeat.shutdown()
+                    timer_repeat = None
+
+                if not self.is_instantiated:
+                    self.is_instantiated = self._instantiate_monitors()
+
+            rospy.sleep(0.1)
 
 
     def _instantiate_monitors(self):
         if self.is_instantiated: return True
 
-        try:
-            msg_class, real_topic, _ = rostopic.get_topic_class(self.topic_name, blocking=False)
-            topic_type, _, _ = rostopic.get_topic_type(self.topic_name, blocking=False)
-        except rostopic.ROSTopicException as e:
-            self.event_callback("Topic %s type cannot be determined, or ROS master cannot be contacted" % self.topic_name, "warn")
-            return False
-
-        if real_topic is None:
-            self.event_callback("Topic %s is not published" % self.topic_name, "warn")
-            if self.signal_when_cfg["signal_when"].lower() == 'not published' and self.signal_when_cfg["safety_critical"]:
-                self.signal_when_is_safe = False
-            return False
-        
         # if rate > 0 set in config then throttle topic at that rate
         if self.rate > 0:
             _id = "".join(str(uuid.uuid4()).split("-"))
             
             COMMAND_BASE = ["rosrun", "topic_tools", "throttle"]
-            subscribed_topic = "/sentor/monitoring/" + _id + real_topic
+            subscribed_topic = "/sentor/monitoring/" + _id + self.real_topic
             
-            command = COMMAND_BASE + ["messages", real_topic, str(self.rate), subscribed_topic]
+            command = COMMAND_BASE + ["messages", self.real_topic, str(self.rate), subscribed_topic]
             subprocess.Popen(command, stdout=open(os.devnull, "wb"))
         else:
-            subscribed_topic = real_topic
+            subscribed_topic = self.real_topic
 
         # find out topic publishing nodes
         master = rosgraph.Master(rospy.get_name())
         try:
             pubs, _ = rostopic.get_topic_list(master=master)
             # filter based on topic
-            pubs = [x for x in pubs if x[0] == real_topic]
+            pubs = [x for x in pubs if x[0] == self.real_topic]
             nodes = []
             for _, _, _nodes in pubs:
                 nodes += _nodes
@@ -138,11 +173,11 @@ class TopicMonitor(Thread):
                      hz_monitor_required = True
         
         if hz_monitor_required:
-            self.hz_monitor = self._instantiate_hz_monitor(subscribed_topic, self.topic_name, msg_class)
+            self.hz_monitor = self._instantiate_hz_monitor(subscribed_topic, self.topic_name, self.msg_class)
 
         if self.signal_when_cfg["signal_when"].lower() == 'published':
             print("Signaling 'published' for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC +" initialized")
-            self.pub_monitor = self._instantiate_pub_monitor(subscribed_topic, self.topic_name, msg_class)
+            self.pub_monitor = self._instantiate_pub_monitor(subscribed_topic, self.topic_name, self.msg_class)
             self.pub_monitor.register_published_cb(self.published_cb)
             
             if self.signal_when_cfg["safety_critical"]:
@@ -151,31 +186,29 @@ class TopicMonitor(Thread):
         elif self.signal_when_cfg["signal_when"].lower() == 'not published':
             print("Signaling 'not published' for "+ bcolors.BOLD + str(self.signal_when_cfg["timeout"]) + " seconds" + bcolors.ENDC +" for " + bcolors.OKBLUE + self.topic_name + bcolors.ENDC +" initialized")
 
+        lambda_configs = []
         if len(self.signal_lambdas_config):
             print("Signaling expressions for "+ bcolors.OKBLUE + self.topic_name + bcolors.ENDC + ":")
-            
-            self.lambda_monitor_list = []
             for signal_lambda in self.signal_lambdas_config:
-                
-                lambda_fn_str = signal_lambda["expression"]
-                lambda_config = self.process_lambda_config(signal_lambda)
-                
-                if lambda_fn_str != "":
-                    print("\t" + bcolors.OKGREEN + lambda_fn_str + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
-                    lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, msg_class, lambda_fn_str, lambda_config)
+                if signal_lambda["expression"] != "":
+                    lambda_config = self.process_lambda_config(signal_lambda)
+                    print("\t" + bcolors.OKGREEN + lambda_config["expr"] + bcolors.ENDC + " ("+ bcolors.BOLD+"timeout: %s seconds" %  lambda_config["timeout"] + bcolors.ENDC +")")
+                    lambda_configs.append(lambda_config)
 
-                    # register cb that notifies when the lambda function is True
-                    lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)
-                    lambda_monitor.register_unsatisfied_cb(self.lambda_unsatisfied_cb)
+        print("")
+        self.lambda_monitor_list = []
+        for lambda_config in lambda_configs:
+            lambda_monitor = self._instantiate_lambda_monitor(subscribed_topic, self.msg_class, lambda_config["expr"], lambda_config)
 
-                    self.lambda_monitor_list.append(lambda_monitor)
-            print("")
+            # register cb that notifies when the lambda function is True
+            lambda_monitor.register_satisfied_cb(self.lambda_satisfied_cb)
+            lambda_monitor.register_unsatisfied_cb(self.lambda_unsatisfied_cb)
+
+            self.lambda_monitor_list.append(lambda_monitor)
 
         self.is_instantiated = True
-        self.active = True
-
         return True
-    
+
 
     def event_callback(self, string, type, msg=""):
         self._event_callback(string, type, msg, self.nodes, self.topic_name)
@@ -330,31 +363,29 @@ class TopicMonitor(Thread):
         rospy.Subscriber(subscribed_topic, msg_class, cb)
 
         return _filter
+    
+    
+    def set_not_published(self, _exec=True):
         
-
+        if self.signal_when_cfg["signal_when"].lower() == 'not published':
+            self.conditions[self.signal_when_cfg["signal_when"]]["satisfied"] = True
+            
+            if self.signal_when_cfg["safety_critical"]:
+                self.signal_when_is_safe = False
+            if self.signal_when_cfg["autonomy_critical"]:
+                self.signal_when_is_auto = False
+            if self.signal_when_cfg["default_notifications"] and self.signal_when_cfg["safety_critical"]:
+                self.event_callback("SAFETY CRITICAL: Topic %s is not published anymore" % self.topic_name, "error")
+            elif self.signal_when_cfg["default_notifications"]:
+                self.event_callback("Topic %s is not published anymore" % self.topic_name, "warn")
+            if _exec and not self.signal_when_cfg["repeat_exec"]:
+                self.execute(process_indices=self.signal_when_cfg["process_indices"])
+        
+        
     def run(self):
-        # if the topic was not published initially then no monitor is running
-        # but, maybe now it is published
-        if not self.is_instantiated:
-            if not self._instantiate_monitors():
-                return
-            else:
-                self.is_instantiated = True
                 
         def cb(_):
-            if self.signal_when_cfg["signal_when"].lower() == 'not published':
-                self.conditions[self.signal_when_cfg["signal_when"]]["satisfied"] = True
-                
-                if self.signal_when_cfg["safety_critical"]:
-                    self.signal_when_is_safe = False
-                if self.signal_when_cfg["autonomy_critical"]:
-                    self.signal_when_is_auto = False
-                if self.signal_when_cfg["default_notifications"] and self.signal_when_cfg["safety_critical"]:
-                    self.event_callback("SAFETY CRITICAL: Topic %s is not published anymore" % self.topic_name, "error")
-                elif self.signal_when_cfg["default_notifications"]:
-                    self.event_callback("Topic %s is not published anymore" % self.topic_name, "warn")
-                if not self.signal_when_cfg["repeat_exec"]:
-                    self.execute(process_indices=self.signal_when_cfg["process_indices"])
+            self.set_not_published()
 
         def repeat_cb(_):
             if self.signal_when_cfg["signal_when"].lower() == 'not published':
@@ -364,6 +395,10 @@ class TopicMonitor(Thread):
         timer_repeat = None
         while not self._killed_event.isSet():
             while not self._stop_event.isSet():
+
+                if self.is_instantiated and self.topic_finder_active:
+                    self.topic_finder.join()
+                    self.topic_finder_active = False
                 
                 self.thread_is_safe = self.signal_when_is_safe and self.lambdas_are_safe
                 if not self.independent_tags:

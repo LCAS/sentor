@@ -5,7 +5,7 @@
 """
 ##########################################################################################
 from __future__ import division
-import signal, rospy, yaml, os
+import signal, rospy, yaml, os, copy
 
 from sentor.TopicMonitor import TopicMonitor
 from sentor.SafetyMonitor import SafetyMonitor
@@ -23,24 +23,23 @@ class sentor(object):
     
     
     def __init__(self):
+
+        self.topics = []
+        self.topic_monitors = []
+        self.topic_monitors_all = []
+        self.tags_in_use = {}
+        
+        config_file = rospy.get_param("~config_file", "")
+        tags = rospy.get_param("~topic_tags", "")
+
+        self.event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
+        self.rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
         
         self.safety_monitor = SafetyMonitor("safe_operation", "SAFE OPERATION", "thread_is_safe", "safety_critical", 
                                             "set_safety_tag", self.event_callback)
         self.autonomy_monitor = SafetyMonitor("pause_autonomous_operation", "SAFE AUTONOMOUS OPERATION", "thread_is_auto", 
                                               "autonomy_critical", "set_autonomy_tag", self.event_callback, invert=True)
         self.multi_monitor = MultiMonitor()
-        
-        self.event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
-        self.rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
-        
-        self.topics = []
-        self.topic_monitors = []
-        self.topic_monitors_all = []
-        self.tags_in_use = []
-        
-        config_file = rospy.get_param("~config_file", "")
-        tags = rospy.get_param("~topic_tags", "")
-        tags = tags.split(",")
         
         if config_file:
             self.load_topics(config_file, tags)
@@ -49,30 +48,34 @@ class sentor(object):
         rospy.Service('/sentor/load_monitors', Client, self.load_monitors)
         rospy.Service('/sentor/stop_monitors', Client, self.stop_monitoring)
         rospy.Service('/sentor/start_monitors', Client, self.start_monitoring)
+        rospy.Service('/sentor/kill_monitors', Client, self.kill_monitors_cb)
         
         signal.signal(signal.SIGINT, self.__signal_handler)
         
         rospy.spin()
         
         
-    def load_topics(self, config_file, requested_tags=[]):
+    def load_topics(self, config_file, requested_tags=""):
+
+        self.config_file = config_file
+        requested_tags = list(set(requested_tags.split(",")))
         self.topics = []
         self.current_tags = []
         
         try:
-            items = [yaml.load(open(item, 'r')) for item in config_file.split(',')]
+            items = [yaml.safe_load(open(item, 'r')) for item in config_file.split(',')]
             self.topics = [item for sublist in items for item in sublist]
             
             if requested_tags and requested_tags[0]:
                 filtered_topics = []
                 for topic in self.topics:
                     if "topic_tags" in topic:
-                        for tag in set(requested_tags):
+                        for tag in requested_tags:
                             if tag in topic["topic_tags"]:
                                 filtered_topics.append(topic)
                                 self.current_tags.append(tag)
-
                 self.topics = filtered_topics
+                self.current_tags = list(set(self.current_tags))
             
         except Exception as e:
             rospy.logerr("Error loading configuration file: {}".format(e))
@@ -100,9 +103,10 @@ class sentor(object):
             topic_tags = []
             if 'topic_tags' in topic:
                 topic_tags = topic['topic_tags']
-                
-            if any(tag in topic_tags for tag in self.tags_in_use):
-                continue
+
+            if self.config_file in self.tags_in_use:    
+                if any(tag in topic_tags for tag in self.tags_in_use[self.config_file]):
+                    continue
     
             rate = 0
             N = 0
@@ -136,10 +140,15 @@ class sentor(object):
             self.safety_monitor.register_monitors(topic_monitor)
             self.autonomy_monitor.register_monitors(topic_monitor)
             self.multi_monitor.register_monitors(topic_monitor)
+
+        if self.config_file not in self.tags_in_use:
+            self.tags_in_use[self.config_file] = self.current_tags
+        else:
+            self.tags_in_use[self.config_file].extend(self.current_tags)
             
-        self.tags_in_use.extend(self.current_tags)
-        self.tags_in_use = list(set(self.tags_in_use))
-            
+        tags = list(set(self.tags_in_use[self.config_file])) 
+        self.tags_in_use[self.config_file] = tags
+           
         rospy.sleep(1.0)
         for topic_monitor in self.topic_monitors:
             topic_monitor.start()
@@ -170,70 +179,111 @@ class sentor(object):
         try:
             self.load_topics(req.config, req.topic_tags)
             self.instantiate()
-            rospy.sleep(0.3)
-            resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-            return True, resp
+            return True
         except Exception as e:
-            rospy.sleep(0.3)
             rospy.logerr(e)
-            resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-            return False, resp
+            return False
         
         
     def stop_monitoring(self, req):
+
+        topic_tags = list(set(req.topic_tags.split(",")))
         
         success = False
         for monitor in self.topic_monitors_all:
-            if req.topic_tags and req.topic_tags[0]:
-                if any(tag in monitor.topic_tags for tag in req.topic_tags):
+            if topic_tags and topic_tags[0]:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitor.stop_monitor()
                     success = True
             else:
                 monitor.stop_monitor()
                 success = True
-        
-        rospy.sleep(0.3)        
-        rospy.logwarn("sentor node stopped monitoring topics")
-        resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
-        
-        return success, resp
+
+        if success:   
+            rospy.logwarn("sentor node stopped monitoring topics")
+        return success
         
     
     def start_monitoring(self, req):
+
+        topic_tags = list(set(req.topic_tags.split(",")))
         
         success = False
         for monitor in self.topic_monitors_all:
-            if req.topic_tags and req.topic_tags[0]:
-                if any(tag in monitor.topic_tags for tag in req.topic_tags):
+            if topic_tags and topic_tags[0]:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
                     monitor.start_monitor()
                     success = True
             else:
                 monitor.start_monitor()
                 success = True
         
-        rospy.sleep(0.3)
-        rospy.logwarn("sentor node started monitoring topics")
-        resp = rospy.wait_for_message('/sentor/monitors', MonitorArray)
+        if success:
+            rospy.logwarn("sentor node started monitoring topics")
+        return success
+
+
+    def kill_monitors_cb(self, req):
         
-        return success, resp
-    
-    
+        topic_tags = list(set(req.topic_tags.split(",")))
+        success = False
+        monitors_to_kill = []
+        tags_to_kill = []
+
+        if topic_tags and topic_tags[0]:
+            for monitor in self.topic_monitors_all:
+                if any(tag in monitor.topic_tags for tag in topic_tags):
+                    monitors_to_kill.append(monitor)
+                    tags_to_kill.extend(monitor.topic_tags)
+                    success = True
+
+            old_tags = copy.deepcopy(self.tags_in_use)
+            self.tags_in_use = {}
+            for key in old_tags:
+                self.tags_in_use[key] = [tag for tag in old_tags[key] if tag not in tags_to_kill]
+        else:
+            monitors_to_kill = self.topic_monitors_all
+            self.tags_in_use = {}
+            success = True
+
+        self.kill_monitors(monitors_to_kill)
+        self.topic_monitors_all = [monitor for monitor in self.topic_monitors_all if monitor not in monitors_to_kill]
+
+        self.init_monitors(self.topic_monitors_all)
+
+        if success:
+            rospy.logwarn("sentor node killed monitors with topic tags '{}'".format(req.topic_tags))
+        return success
+
+        
+    def kill_monitors(self, topic_monitors):
+
+        for topic_monitor in topic_monitors:
+            topic_monitor.kill_monitor()
+
+        for topic_monitor in topic_monitors:
+            topic_monitor.join()
+
+
+    def init_monitors(self, topic_monitors):
+
+        self.safety_monitor.topic_monitors = []
+        self.autonomy_monitor.topic_monitors = []
+        self.multi_monitor.topic_monitors = []
+
+        for topic_monitor in topic_monitors:
+            self.safety_monitor.register_monitors(topic_monitor)
+            self.autonomy_monitor.register_monitors(topic_monitor)
+            self.multi_monitor.register_monitors(topic_monitor)
+
+
     def __signal_handler(self, signum, frame):
 
-        def kill_monitors():
-            for topic_monitor in self.topic_monitors:
-                topic_monitor.kill_monitor()
+        self.safety_monitor.stop_monitor()
+        self.autonomy_monitor.stop_monitor()
+        self.multi_monitor.stop_monitor()
     
-            self.safety_monitor.stop_monitor()
-            self.autonomy_monitor.stop_monitor()
-            self.multi_monitor.stop_monitor()
-    
-        def join_monitors():
-            for topic_monitor in self.topic_monitors:
-                topic_monitor.join()
-    
-        kill_monitors()
-        join_monitors()
+        self.kill_monitors(self.topic_monitors_all)
         print("stopped.")
         os._exit(signal.SIGTERM)
 ##########################################################################################

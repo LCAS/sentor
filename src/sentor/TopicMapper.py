@@ -75,7 +75,7 @@ class TopicMapper(Thread):
     def set_limits(self):
         
         if "map" in self.config:
-            map_config = yaml.load(file(self.config["map"], 'r'))
+            map_config = yaml.safe_load(open(self.config["map"], 'r'))
             dims = imread(os.path.dirname(self.config["map"]) + "/" + map_config["image"]).shape
             
             self.x_min, self.x_max = map_config["origin"][0], map_config["origin"][0] + (map_config["resolution"] * dims[0]) 

@@ -1,26 +1,41 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Created on Thu Nov 21 10:30:22 2019
 
 @author: Adam Binch (abinch@sagarobotics.com)
+Modified for ROS2
 """
 #####################################################################################
-import rospy, rosservice, rostopic, actionlib, subprocess
-import dynamic_reconfigure.client
-import os, numpy, math
+import rclpy
+from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.action import ActionClient
+from rclpy.parameter import Parameter
+from rcl_interfaces.msg import ParameterType
+from rclpy.task import Future
+import subprocess
+import os
+import numpy
+import math
 from threading import Lock
+import importlib
+from typing import Any, Dict, List, Optional, Tuple, Union
+import time
 
+def _import(location: str, name: str) -> Any:
+    """Import a module dynamically"""
+    mod = importlib.import_module(location)
+    return getattr(mod, name)
 
-def _import(location, name):
-    mod = __import__(location, fromlist=[name]) 
-    return getattr(mod, name) 
-
-
-class Executor(object):
-    
-    
-    def __init__(self, config, event_cb):
-
+class Executor:
+    def __init__(self, config: List[Dict], event_cb: callable):
+        """
+        Initialize the executor
+        
+        Args:
+            config: List of process configurations
+            event_cb: Callback for reporting events
+        """
         self.config = config
         self.event_cb = event_cb
         
@@ -28,350 +43,213 @@ class Executor(object):
         self._lock = Lock()
         self.processes = []
         
+        # Create ROS2 node for the executor
+        self.node = rclpy.create_node('sentor_executor')
+        self.callback_group = ReentrantCallbackGroup()
+        
         for process in config:
-            
             process_type = list(process.keys())[0]
             
             if process_type == "call":
                 self.init_call(process)
-                
             elif process_type == "publish":
                 self.init_publish(process)
-                
             elif process_type == "action":
                 self.init_action(process)
-                
             elif process_type == "sleep":
                 self.init_sleep(process)
-                
             elif process_type == "shell":
                 self.init_shell(process)
-                
             elif process_type == "log":
                 self.init_log(process)
-                
-            elif process_type == "reconf":
-                self.init_reconf(process)
-
+            elif process_type == "parameter":  # renamed from reconf
+                self.init_parameter(process)
             elif process_type == "lock_acquire":
                 self.init_lock_acquire(process)
-
             elif process_type == "lock_release":
                 self.init_lock_release(process)
-                
             elif process_type == "custom":
                 self.init_custom(process)
-                
             else:
-                self.event_cb("Process of type '{}' not supported".format(process_type), "warn")
+                self.event_cb(f"Process of type '{process_type}' not supported", "warn")
                 self.processes.append("not_initialised")
         
-        self.default_indices = range(len(self.processes))        
-                    
-                    
-    def init_call(self, process):
-        
+        self.default_indices = range(len(self.processes))
+
+    def init_call(self, process: Dict) -> None:
+        """Initialize a service call process"""
         try:
             service_name = process["call"]["service_name"]
             service_name = self.get_name(service_name)
-                    
-            service_class = rosservice.get_service_class_by_name(service_name)
             
-            timeout_srv = 1.0
-            if "timeout" in process["call"]:
-                timeout_srv = process["call"]["timeout"]
+            # Import service type
+            service_parts = process["call"]["service_type"].split('/')
+            service_module = '.'.join(service_parts[:-1]) + '.srv'
+            service_name_type = service_parts[-1]
+            service_type = getattr(importlib.import_module(service_module), service_name_type)
             
-            req = service_class._request_class()
-            for arg in process["call"]["service_args"]: exec(arg)
+            timeout_srv = process["call"].get("timeout", 1.0)
+            
+            # Create request
+            req = service_type.Request()
+            for arg in process["call"]["service_args"]:
+                exec(arg)
 
-            d = {}
-            d["name"] = "call"
-            d["verbose"] = self.is_verbose(process["call"])
-            d["def_msg"] = ("Calling service '{}'".format(service_name), "info", req)
-            d["func"] = "self.call(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["service_name"] = service_name
-            d["kwargs"]["service_class"] = service_class
-            d["kwargs"]["req"] = req
-            d["kwargs"]["verbose"] = self.is_verbose(process["call"])
-            d["kwargs"]["timeout_srv"] = timeout_srv
-            
+            d = {
+                "name": "call",
+                "verbose": self.is_verbose(process["call"]),
+                "def_msg": (f"Calling service '{service_name}'", "info", req),
+                "func": "self.call(**kwargs)",
+                "kwargs": {
+                    "service_name": service_name,
+                    "service_type": service_type,
+                    "req": req,
+                    "verbose": self.is_verbose(process["call"]),
+                    "timeout_srv": timeout_srv
+                }
+            }
             self.processes.append(d)
             
         except Exception as e:
             self.event_cb(self.init_err_str.format("call", str(e)), "warn")
             self.processes.append("not_initialised")
             
+    def call(self, service_name: str, service_type: Any, req: Any, verbose: bool, timeout_srv: float) -> None:
+        """Execute a service call"""
+        client = self.node.create_client(service_type, service_name)
+        if not client.wait_for_service(timeout_sec=timeout_srv):
+            self.event_cb(f"Service {service_name} not available", "warn")
+            return
             
-    def init_publish(self, process):
+        future = client.call_async(req)
+        rclpy.spin_until_future_complete(self.node, future)
         
-        try:
-            topic_name = process["publish"]["topic_name"]
-            topic_name = self.get_name(topic_name)
-            
-            topic_latched = False
-            if "topic_latched" in process["publish"]:
-                topic_latched = process["publish"]["topic_latched"]
-            
-            msg_class, real_topic, _ = rostopic.get_topic_class(topic_name)
-            pub = rospy.Publisher(real_topic, msg_class, latch=topic_latched, 
-                                  queue_size=10)
-            
-            msg = msg_class()
-            for arg in process["publish"]["topic_args"]: exec(arg)
-                
-            d = {}
-            d["name"] = "publish"
-            d["verbose"] = self.is_verbose(process["publish"])
-            d["def_msg"] = ("Publishing to topic '{}'".format(topic_name), "info", msg)
-            d["func"] = "self.publish(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["pub"] = pub
-            d["kwargs"]["msg"] = msg
-            
-            self.processes.append(d)
-            
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("publish", str(e)), "warn")
-            self.processes.append("not_initialised")
-            
-            
-    def init_action(self, process):
-        
-        try:
-            namespace = process["action"]["namespace"]
-            package = process["action"]["package"]
-            spec = process["action"]["action_spec"]
-            
-            action_spec = _import(package+".msg", spec)
-            goal_class = _import(package+".msg", spec[:-6] + "Goal")
+        if future.result() is not None:
+            response = future.result()
+            if hasattr(response, 'success'):
+                if verbose and response.success:
+                    self.event_cb(f"Call to service '{service_name}' succeeded", "info", req)
+                elif not response.success:
+                    self.event_cb(f"Call to service '{service_name}' failed", "warn", req)
+        else:
+            self.event_cb(f"Service call to {service_name} failed", "warn")
 
-            rospy.sleep(1.0)
-            
-            action_client = actionlib.SimpleActionClient(namespace, action_spec)
-            wait = action_client.wait_for_server(rospy.Duration(5.0))
-            if not wait:
-                e = "Action server with namespace '{}' and action specification '{}' not available".format(namespace, spec)
-                self.event_cb(self.init_err_str.format("action", e), "warn")
-                self.processes.append("not_initialised")
-                return
-    
-            goal = goal_class()
-            for arg in process["action"]["goal_args"]: exec(arg)
-                
-            d = {}
-            d["name"] = "action"
-            d["verbose"] = self.is_verbose(process["action"])
-            d["def_msg"] = ("Sending goal for '{}' action with specification '{}'".format(namespace, spec), "info", goal)
-            d["func"] = "self.action(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["namespace"] = namespace
-            d["kwargs"]["spec"] = spec
-            d["kwargs"]["action_client"] = action_client
-            d["kwargs"]["goal"] = goal
-            d["kwargs"]["verbose"] = self.is_verbose(process["action"])
+    def publish(self, pub: Any, msg: Any) -> None:
+        """Publish a message"""
+        pub.publish(msg)
 
-            d["kwargs"]["wait"] = False            
-            if "wait" in process["action"]:
-                d["kwargs"]["wait"] = process["action"]["wait"]
-            
-            self.processes.append(d)
+    async def action(self, namespace: str, spec: str, action_client: ActionClient, 
+                    goal: Any, verbose: bool, wait: bool) -> None:
+        """Send an action goal"""
+        self.action_namespace = namespace
+        self.spec = spec
+        self.goal = goal
+        self.verbose_action = verbose
         
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("action", str(e)), "warn")
-            self.processes.append("not_initialised")
-            
+        send_goal_future = action_client.send_goal_async(goal, feedback_callback=self.feedback_callback)
+        rclpy.spin_until_future_complete(self.node, send_goal_future)
         
-    def init_sleep(self, process):
-        
-        try:
-            d = {}
-            d["name"] = "sleep"
-            d["verbose"] = self.is_verbose(process["sleep"])
-            d["def_msg"] = ("Sentor sleeping for {} seconds".format(process["sleep"]["duration"]), "info", "")
-            d["func"] = "self.sleep(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["duration"] = process["sleep"]["duration"]
-            
-            self.processes.append(d)
+        goal_handle = send_goal_future.result()
+        if not goal_handle.accepted:
+            self.event_cb(f"Goal rejected for '{namespace}' action", "warn", goal)
+            return
 
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("sleep", str(e)), "warn")
-            self.processes.append("not_initialised")            
+        if wait:
+            get_result_future = goal_handle.get_result_async()
+            rclpy.spin_until_future_complete(self.node, get_result_future)
             
-            
-    def init_shell(self, process):
-        
-        try:
-            d = {}
-            d["name"] = "shell"
-            d["verbose"] = self.is_verbose(process["shell"])
-            d["def_msg"] = ("Executing shell commands {}".format(process["shell"]["cmd_args"]), "info", "")
-            d["func"] = "self.shell(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["cmd_args"] = process["shell"]["cmd_args"]
-            d["kwargs"]["shell_features"] = process["shell"]["shell_features"] if "shell_features" in process["shell"] else False
-            
-            self.processes.append(d)
-
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("shell", str(e)), "warn")
-            self.processes.append("not_initialised")
-
-
-    def init_log(self, process):
-        
-        try:            
-            d = {}
-            d["name"] = "log"
-            d["verbose"] = False
-            d["func"] = "self.log(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["message"] = process["log"]["message"]
-            d["kwargs"]["level"] = process["log"]["level"]
-            
-            if "msg_args" in process["log"]:
-                d["kwargs"]["msg_args"] = process["log"]["msg_args"]
+            result = get_result_future.result()
+            if result.status == 4:  # SUCCEEDED
+                if verbose:
+                    self.event_cb(f"Goal succeeded for '{namespace}' action", "info", goal)
             else:
-                d["kwargs"]["msg_args"] = None                
-            
-            self.processes.append(d)
+                self.event_cb(f"Goal failed for '{namespace}' action. Status is {result.status}", "warn", goal)
 
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("log", str(e)), "warn")
-            self.processes.append("not_initialised")
-            
-            
-    def init_reconf(self, process):
+    def feedback_callback(self, feedback_msg: Any) -> None:
+        """Handle action feedback"""
+        if self.verbose_action:
+            self.event_cb(f"Received feedback for '{self.action_namespace}' action", "info", feedback_msg.feedback)
+
+    def sleep(self, duration: float) -> None:
+        """Sleep for specified duration"""
+        time.sleep(duration)
+
+    def shell(self, cmd_args: List[str], shell_features: bool) -> None:
+        """Execute shell commands"""
+        process = subprocess.Popen(cmd_args,
+                                 shell=shell_features,
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE)
+                     
+        stdout, stderr = process.communicate()
+        print(stdout.decode())
         
-        try:
-            params = process["reconf"]["params"]
-            namespaces = set([param["namespace"] for param in params])
-            
-            default_config = {}
-            for namespace in namespaces:
-                rcnfclient = dynamic_reconfigure.client.Client(namespace, timeout=2.0)
-                default_config[namespace] = rcnfclient.get_configuration()
+        if stderr:
+            self.event_cb(f"Unable to execute shell commands {cmd_args}: {stderr.decode()}", "warn")
+
+    def log(self, message: str, level: str, msg_args: Optional[List[str]] = None) -> None:
+        """Log a message"""
+        msg = self.msg
+        if msg is not None and msg_args is not None:
+            args = [eval(arg) for arg in msg_args]
+            self.event_cb("CUSTOM MSG: " + message.format(*args), level)
+        else:
+            self.event_cb("CUSTOM MSG: " + message, level)
+
+    def parameter(self, params: List[Dict], default_params: List[Any]) -> None:
+        """Update parameters"""
+        for param, default_param in zip(params, default_params):
+            node_name = param.get("node", "")  # Get target node name if specified
+            if node_name:
+                # Create a client to set parameters on another node
+                from rclpy.parameter_client import ParameterClient
+                client = ParameterClient(node=self.node, node_name=node_name)
                 
-            default_params = [default_config[param["namespace"]][param["name"]] for param in params]
-            
-            d = {}
-            d["name"] = "reconf"
-            d["verbose"] = self.is_verbose(process["reconf"])
-            d["def_msg"] = ("Reconfiguring parameters: {}".format(params), "info", "")
-            d["func"] = "self.reconf(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["params"] = params
-            d["kwargs"]["default_params"] = default_params
-            
-            self.processes.append(d)
-
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("reconf", str(e)), "warn")
-            self.processes.append("not_initialised")
-
-
-    def init_lock_acquire(self, process):
-        
-        try:
-            d = {}
-            d["name"] = "lock_acquire"
-            d["verbose"] = False
-            d["func"] = "self.lock_acquire()"
-            d["kwargs"] = {}
-            
-            self.processes.append(d)
-
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("lock_acquire", str(e)), "warn")
-            self.processes.append("not_initialised")
-            
-
-    def init_lock_release(self, process):
-        
-        try:
-            d = {}
-            d["name"] = "lock_release"
-            d["verbose"] = False
-            d["func"] = "self.lock_release()"
-            d["kwargs"] = {}
-            
-            self.processes.append(d)
-
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("lock_release", str(e)), "warn")
-            self.processes.append("not_initialised")
-            
-            
-    def init_custom(self, process):
-        
-        try:
-            package = process["custom"]["package"]
-            name = process["custom"]["name"]
-            
-            _file = name
-            if "file" in process["custom"]:
-                _file = process["custom"]["file"]
-            
-            custom_proc = _import("{}.{}".format(package, _file), name)
-            
-            if "init_args" in process["custom"]:
-                args = process["custom"]["init_args"] 
-                cp = custom_proc(*args)
+                value = param["value"] if param["value"] != "_default" else default_param
+                client.set_parameters([Parameter(param["name"], value=value)])
             else:
-                cp = custom_proc()
-            
-            d = {}
-            d["name"] = "custom"
-            d["verbose"] = self.is_verbose(process["custom"])
-            d["def_msg"] = ("Executing custom process '{}' from package '{}'".format(name, package), "info", "")
-            d["func"] = "self.custom(**kwargs)"
-            d["kwargs"] = {}
-            d["kwargs"]["cp"] = cp
-            
-            d["kwargs"]["args"] = None
-            if "run_args" in process["custom"]:
-                d["kwargs"]["args"] = process["custom"]["run_args"]
-            
-            self.processes.append(d)
-            
-        except Exception as e:
-            self.event_cb(self.init_err_str.format("custom", str(e)), "warn")
-            self.processes.append("not_initialised")
+                # Set parameter on this node
+                value = param["value"] if param["value"] != "_default" else default_param
+                self.node.set_parameters([Parameter(param["name"], value=value)])
 
-        
-    def get_name(self, name):
-        
+    def lock_acquire(self) -> None:
+        """Acquire the lock"""
+        self._lock.acquire()
+
+    def lock_release(self) -> None:
+        """Release the lock"""
+        self._lock.release()
+
+    def custom(self, cp: Any, args: Optional[List[Any]]) -> None:
+        """Execute a custom process"""
+        if args is not None:
+            cp.run(*args)
+        else:
+            cp.run()
+
+    def get_name(self, name: str) -> str:
+        """Get name from environment or parameter server"""
         env_name = os.environ.get(name)
         if env_name is not None:
-            name = env_name
+            return env_name
             
-        if rospy.has_param(name):
-            name = rospy.get_param(name)
-            
-        return name
+        try:
+            return self.node.get_parameter(name).value
+        except:
+            return name
 
-        
-    def is_verbose(self, process):
-        
-        verbose = False
-        if "verbose" in process:
-            verbose = process["verbose"]
-            
-        return verbose
-            
-        
-    def execute(self, msg=None, process_indices=None):
-        
+    def is_verbose(self, process: Dict) -> bool:
+        """Check if process is verbose"""
+        return process.get("verbose", False)
+
+    def execute(self, msg: Any = None, process_indices: Optional[List[int]] = None) -> None:
+        """Execute the configured processes"""
         self.msg = msg
         
-        if process_indices is None:
-            indices = self.default_indices
-        else:
-            indices = process_indices
+        indices = process_indices if process_indices is not None else self.default_indices
         
         for index in indices:
-            rospy.sleep(0.1) # needed when using slackeros
+            time.sleep(0.1)  # needed when using slackeros
             
             process = self.processes[index]
             if process == "not_initialised":
@@ -385,97 +263,9 @@ class Executor(object):
                 eval(process["func"])
                 
             except Exception as e:
-                self.event_cb("Unable to execute process of type '{}': {}".format(process["name"], str(e)), "warn")
-            
+                self.event_cb(f"Unable to execute process of type '{process['name']}': {str(e)}", "warn")
 
-    def call(self, service_name, service_class, req, verbose, timeout_srv):
-        
-        rospy.wait_for_service(service_name, timeout=timeout_srv)
-        service_client = rospy.ServiceProxy(service_name, service_class)
-        resp = service_client(req)
-        
-        if verbose and resp.success:
-            self.event_cb("Call to service '{}' succeeded".format(service_name), "info", req)
-        elif not resp.success:
-            self.event_cb("Call to service '{}' failed".format(service_name), "warn", req)
-        
-        
-    def publish(self, pub, msg):
-        pub.publish(msg)
-        
-        
-    def action(self, namespace, spec, action_client, goal, verbose, wait):
-        
-        self.action_namespace = namespace
-        self.spec = spec
-        self.goal = goal
-        self.verbose_action = verbose
-        
-        action_client.send_goal(goal, self.goal_cb)
-        
-        if wait:
-            action_client.wait_for_result()
-            
-        
-    def sleep(self, duration):
-        rospy.sleep(duration)
-        
-        
-    def shell(self, cmd_args, shell_features):
-        
-        process = subprocess.Popen(cmd_args,
-                     shell=shell_features,
-                     stdout=subprocess.PIPE, 
-                     stderr=subprocess.PIPE)
-                     
-        stdout, stderr = process.communicate()
-        print(stdout)
-        
-        if stderr:
-            self.event_cb("Unable to execute shell commands {}: {}".format(cmd_args, stderr), "warn")
-        
-    
-    def log(self, message, level, msg_args):
-        
-        msg = self.msg
-        if msg is not None and msg_args is not None:
-            args = [eval(arg) for arg in msg_args]
-            self.event_cb("CUSTOM MSG: " + message.format(*args), level)
-        else:
-            self.event_cb("CUSTOM MSG: " + message, level)
-            
-            
-    def reconf(self, params, default_params):
-        
-        for param, default_param in zip(params, default_params):            
-            rcnfclient = dynamic_reconfigure.client.Client(param["namespace"], timeout=1.0)
-            
-            if param["value"] != "_default":
-                value = param["value"]
-            else:
-                value = default_param
-                
-            rcnfclient.update_configuration({param["name"]: value})
-            
-            
-    def lock_acquire(self):
-        self._lock.acquire()
-
-
-    def lock_release(self):
-        self._lock.release()
-        
-        
-    def custom(self, cp, args):
-        cp.run(*args) if args is not None else cp.run()
-         
-        
-    def goal_cb(self, status, result):
-        
-        if self.verbose_action and status == 3:
-            self.event_cb("Goal succeeded for '{}' action with specification '{}'".format(self.action_namespace, self.spec), "info", self.goal)
-        elif status == 2:
-            self.event_cb("Goal preempted for '{}' action with specification '{}'".format(self.action_namespace, self.spec), "warn", self.goal)
-        elif status != 3:
-            self.event_cb("Goal failed for '{}' action with specification '{}'. Status is {}".format(self.action_namespace, self.spec, status), "warn", self.goal)
+    def cleanup(self) -> None:
+        """Cleanup node"""
+        self.node.destroy_node()
 #####################################################################################

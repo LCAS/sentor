@@ -1,179 +1,169 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 @author: Francesco Del Duchetto (FDelDuchetto@lincoln.ac.uk)
 @author: Adam Binch (abinch@sagarobotics.com)
 """
 ##########################################################################################
-from __future__ import division
 from sentor.TopicMonitor import TopicMonitor
 from sentor.SafetyMonitor import SafetyMonitor
 from sentor.MultiMonitor import MultiMonitor
 from std_msgs.msg import String
 from sentor.msg import SentorEvent
-from std_srvs.srv import Empty, EmptyResponse
-import pprint
+from std_srvs.srv import Empty
+import rclpy
+from rclpy.node import Node
 import signal
-import rospy
-import time
 import yaml
 import sys
 import os
+import time
 
-# TODO nice printing of frequency of the topic with curses
-# TODO consider timeout
 
-unpublished_topics_indexes = []
-satisfied_filters_indexes = []
+class SentorNode(Node):
+    def __init__(self):
+        super().__init__('sentor')
+        
+        self.topic_monitors = []
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('config_file', ''),
+                ('safe_operation_timeout', 10.0),
+                ('auto_safety_tagging', True),
+                ('safety_pub_rate', 10.0),
+                ('independent_tags', False)
+            ]
+        )
 
-topic_monitors = []
+        config_file = self.get_parameter('config_file').value
+        try:
+            items = [yaml.safe_load(open(item, 'r')) for item in config_file.split(',')]
+            self.topics = [item for sublist in items for item in sublist]
+        except Exception as e:
+            self.get_logger().error("No configuration file provided: %s" % e)
+            self.topics = []
 
-event_pub = None
-rich_event_pub = None
+        # Setup services
+        self.stop_srv = self.create_service(Empty, '/sentor/stop_monitor', self.stop_monitoring)
+        self.start_srv = self.create_service(Empty, '/sentor/start_monitor', self.start_monitoring)
 
-def __signal_handler(signum, frame):
+        # Setup publishers
+        self.event_pub = self.create_publisher(String, '/sentor/event', 10)
+        self.rich_event_pub = self.create_publisher(SentorEvent, '/sentor/rich_event', 10)
+        
+        # Setup monitors
+        self.safety_monitor = SafetyMonitor("safe_operation", "SAFE OPERATION", 
+                                          "thread_is_safe", "set_safety_tag", 
+                                          self.event_callback)
+        self.autonomy_monitor = SafetyMonitor("pause_autonomous_operation", 
+                                            "SAFE AUTONOMOUS OPERATION", 
+                                            "thread_is_auto", "set_autonomy_tag", 
+                                            self.event_callback, invert=True)
+        self.multi_monitor = MultiMonitor()
 
-    def kill_monitors():
-        for topic_monitor in topic_monitors:
+        self.setup_topic_monitors()
+        
+    def setup_topic_monitors(self):
+        self.get_logger().info("Monitoring topics:")
+        for i, topic in enumerate(self.topics):
+            include = topic.get('include', True)
+            if not include:
+                continue
+            
+            try:
+                topic_name = topic["name"]
+            except Exception as e:
+                self.get_logger().error("topic name is not specified for entry %s" % topic)
+                continue
+
+            rate = topic.get('rate', 0)
+            N = int(topic.get('N', 0))
+            signal_when = topic.get('signal_when', {})
+            signal_lambdas = topic.get('signal_lambdas', [])
+            processes = topic.get('execute', [])
+            timeout = topic.get('timeout', 0)
+            default_notifications = topic.get('default_notifications', True)
+
+            topic_monitor = TopicMonitor(topic_name, rate, N, signal_when, 
+                                       signal_lambdas, processes, timeout,
+                                       default_notifications, self.event_callback, i)
+
+            self.topic_monitors.append(topic_monitor)
+            self.safety_monitor.register_monitors(topic_monitor)
+            self.autonomy_monitor.register_monitors(topic_monitor)
+            self.multi_monitor.register_monitors(topic_monitor)
+
+    def start_monitoring(self, request, response):
+        for topic_monitor in self.topic_monitors:
+            topic_monitor.start_monitor()
+
+        self.safety_monitor.start_monitor()
+        self.autonomy_monitor.start_monitor()
+        self.multi_monitor.start_monitor()
+
+        self.get_logger().warn("sentor_node started monitoring")
+        return response
+
+    def stop_monitoring(self, request, response):
+        for topic_monitor in self.topic_monitors:
+            topic_monitor.stop_monitor()
+            
+        self.safety_monitor.stop_monitor()
+        self.autonomy_monitor.stop_monitor()
+        self.multi_monitor.stop_monitor()
+
+        self.get_logger().warn("sentor_node stopped monitoring")
+        return response
+
+    def event_callback(self, string, type, msg="", nodes=[], topic=""):
+        if type == "info":
+            self.get_logger().info(f"{string}\n{str(msg)}")
+        elif type == "warn":
+            self.get_logger().warn(f"{string}\n{str(msg)}")
+        elif type == "error":
+            self.get_logger().error(f"{string}\n{str(msg)}")
+
+        if self.event_pub:
+            self.event_pub.publish(String(data=f"{type}: {string}"))
+
+        if self.rich_event_pub:
+            event = SentorEvent()
+            event.header.stamp = self.get_clock().now().to_msg()
+            event.level = {
+                "info": SentorEvent.INFO,
+                "warn": SentorEvent.WARN,
+                "error": SentorEvent.ERROR
+            }[type]
+            event.message = string
+            event.nodes = nodes
+            event.topic = topic
+            self.rich_event_pub.publish(event)
+
+    def cleanup(self):
+        for topic_monitor in self.topic_monitors:
             topic_monitor.kill_monitor()
-
-        safety_monitor.stop_monitor()
-        autonomy_monitor.stop_monitor()
-        multi_monitor.stop_monitor()
-
-    def join_monitors():
-        for topic_monitor in topic_monitors:
             topic_monitor.join()
 
-    kill_monitors()
-    join_monitors()
-    print("stopped.")
-    os._exit(signal.SIGTERM)
+        self.safety_monitor.stop_monitor()
+        self.autonomy_monitor.stop_monitor()
+        self.multi_monitor.stop_monitor()
+        self.get_logger().info("stopped.")
+
+
+def main(args=None):
+    rclpy.init(args=args)
     
-
-def stop_monitoring(_):
-    for topic_monitor in topic_monitors:
-        topic_monitor.stop_monitor()
-        
-    safety_monitor.stop_monitor()
-    autonomy_monitor.stop_monitor()
-    multi_monitor.stop_monitor()
-
-    rospy.logwarn("sentor_node stopped monitoring")
-    ans = EmptyResponse()
-    return ans
+    sentor_node = SentorNode()
     
-
-def start_monitoring(_):    
-    for topic_monitor in topic_monitors:
-        topic_monitor.start_monitor()
-
-    safety_monitor.start_monitor()
-    autonomy_monitor.start_monitor()
-    multi_monitor.start_monitor()
-
-    rospy.logwarn("sentor_node started monitoring")
-    ans = EmptyResponse()
-    return ans
-    
-
-def event_callback(string, type, msg="", nodes=[], topic=""):
-    if type == "info":
-        rospy.loginfo(string + '\n' + str(msg))
-    elif type == "warn":
-        rospy.logwarn(string + '\n' + str(msg))
-    elif type == "error":
-        rospy.logerr(string + '\n' + str(msg))
-
-    if event_pub is not None:
-        event_pub.publish(String("%s: %s" % (type, string)))
-
-    if rich_event_pub is not None:
-        event = SentorEvent()
-        event.header.stamp = rospy.Time.now()
-        event.level = SentorEvent.INFO if type == "info" else SentorEvent.WARN if type == "warn" else SentorEvent.ERROR
-        event.message = string
-        event.nodes = nodes
-        event.topic = topic
-        rich_event_pub.publish(event)
-##########################################################################################
-    
-
-##########################################################################################
-if __name__ == "__main__":
-    signal.signal(signal.SIGINT, __signal_handler)
-    rospy.init_node("sentor")
-
-    config_file = rospy.get_param("~config_file", "")
     try:
-        items = [yaml.load(open(item, 'r') , Loader=yaml.FullLoader) for item in config_file.split(',')]
-        topics = [item for sublist in items for item in sublist]
-    except Exception as e:
-        rospy.logerr("No configuration file provided: %s" % e)
-        topics = []
+        rclpy.spin(sentor_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sentor_node.cleanup()
+        sentor_node.destroy_node()
+        rclpy.shutdown()
 
-    stop_srv = rospy.Service('/sentor/stop_monitor', Empty, stop_monitoring)
-    start_srv = rospy.Service('/sentor/start_monitor', Empty, start_monitoring)
 
-    event_pub = rospy.Publisher('/sentor/event', String, queue_size=10)
-    rich_event_pub = rospy.Publisher('/sentor/rich_event', SentorEvent, queue_size=10)
-    
-    safety_monitor = SafetyMonitor("safe_operation", "SAFE OPERATION", "thread_is_safe", "set_safety_tag", event_callback)
-    autonomy_monitor = SafetyMonitor("pause_autonomous_operation", "SAFE AUTONOMOUS OPERATION", "thread_is_auto", "set_autonomy_tag", event_callback, invert=True)
-    multi_monitor = MultiMonitor()
-
-    topic_monitors = []
-    print("Monitoring topics:")
-    for i, topic in enumerate(topics):
-        
-        include = True
-        if 'include' in topic:
-            include = topic['include']
-            
-        if not include:
-            continue
-        
-        try:
-            topic_name = topic["name"]
-        except Exception as e:
-            rospy.logerr("topic name is not specified for entry %s" % topic)
-            continue
-
-        rate = 0
-        N = 0
-        signal_when = {}
-        signal_lambdas = []
-        processes = []
-        timeout = 0
-        default_notifications = True
-        
-        if 'rate' in topic:
-            rate = topic['rate']
-        if 'N' in topic:
-            N = int(topic['N'])
-        if 'signal_when' in topic:
-            signal_when = topic['signal_when']
-        if 'signal_lambdas' in topic:
-            signal_lambdas = topic['signal_lambdas']
-        if 'execute' in topic:
-            processes = topic['execute']
-        if 'timeout' in topic:
-            timeout = topic['timeout']
-        if 'default_notifications' in topic:
-            default_notifications = topic['default_notifications']
-
-        topic_monitor = TopicMonitor(topic_name, rate, N, signal_when, signal_lambdas, processes, 
-                                     timeout, default_notifications, event_callback, i)
-
-        topic_monitors.append(topic_monitor)
-        safety_monitor.register_monitors(topic_monitor)
-        autonomy_monitor.register_monitors(topic_monitor)
-        multi_monitor.register_monitors(topic_monitor)
-            
-    time.sleep(1)
-
-    # start monitoring
-    for topic_monitor in topic_monitors:
-        topic_monitor.start()
-
-    rospy.spin()
-##########################################################################################
+if __name__ == '__main__':
+    main()

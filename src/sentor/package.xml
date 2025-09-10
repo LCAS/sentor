@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>sentor</name>
+  <version>0.1.0</version>
+  <description>Sentor Python-based monitoring logic</description>
+
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+
+  <!-- Build tools -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <!-- Core build dependencies -->
+  <build_depend>rclpy</build_depend>
+  <build_depend>sentor_msgs</build_depend>
+  <build_depend>control_msgs</build_depend>
+
+  <!-- Runtime dependencies -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sentor_msgs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>controller_manager_msgs</exec_depend>
+  <exec_depend>example_interfaces</exec_depend>
+  <exec_depend>geographic_msgs</exec_depend>
+  <exec_depend>logging_demo</exec_depend>
+  <exec_depend>map_msgs</exec_depend>
+  <exec_depend>pcl_msgs</exec_depend>
+  <exec_depend>robot_localization</exec_depend>
+  <exec_depend>turtlesim</exec_depend>
+  <exec_depend>zed_msgs</exec_depend>
+  
+  <!-- Launch dependencies -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

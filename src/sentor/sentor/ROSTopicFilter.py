@@ -83,12 +83,22 @@ class ROSTopicFilter:
                 depth=10,
                 durability=DurabilityPolicy.VOLATILE
             )
-        info = infos[0]
+            
+        # Get the publisher's QoS profile
+        pub_qos = infos[0].qos_profile
+        
+        # **CRUCIAL FIX:** Check for the UNKNOWN history policy and correct it.
+        history_policy = pub_qos.history
+        if history_policy == HistoryPolicy.UNKNOWN:
+            self.node.get_logger().warn(f"Publisher for '{topic_name}' has an UNKNOWN history policy. Defaulting to KEEP_LAST.")
+            history_policy = HistoryPolicy.KEEP_LAST
+            
+        # Build the subscriber's QoS profile using the validated policy
         return QoSProfile(
-            reliability=info.qos_profile.reliability,
-            durability=info.qos_profile.durability,
-            history=info.qos_profile.history,
-            depth=info.qos_profile.depth
+            reliability=pub_qos.reliability,
+            durability=pub_qos.durability,
+            history=history_policy, # Use the corrected value here
+            depth=pub_qos.depth
         )
 
     def callback_filter(self, msg):

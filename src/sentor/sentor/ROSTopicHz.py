@@ -13,6 +13,8 @@ from rclpy.qos import QoSProfile
 from threading import Lock
 import math
 from threading import Event
+import time
+import statistics
 
 class ROSTopicHz:
     def __init__(self, node, topic_name, window_size=1000, throttle_val=1, stop_event=None):
@@ -78,14 +80,62 @@ class ROSTopicHz:
             self.last_msg_time = now
 
     def get_hz(self):
+        """
+        Calculate the estimated frequency (Hz) of incoming messages based on recorded time intervals.
+
+        This method uses a list of recorded time intervals (`self.times`) between consecutive messages
+        to compute the mean, standard deviation, and estimated frequency (in Hz).
+        If no messages have been received recently (i.e., the last interval exceeds twice the mean interval),
+        the frequency is considered effectively zero.
+
+        Returns:
+            tuple or None:
+                Returns a tuple containing:
+                    - hz (float): Estimated frequency in Hz.
+                    - min_time (float): Minimum recorded interval.
+                    - max_time (float): Maximum recorded interval.
+                    - stddev (float): Standard deviation of recorded intervals.
+                    - count (int): Number of recorded intervals.
+                Returns None if the monitor is disabled or no intervals are recorded.
+        """
+
+        # If monitoring is disabled or no time intervals are available, return None
         if not self.enabled or len(self.times) == 0:
             return None
-        if len(self.times) < 2:
-            return None
-        import statistics
+
+        # Get the current system time
+        now = time.time()
+
+        # Calculate time since the last received message
+        # If 'last_msg_time' attribute doesn't exist, assume infinite interval
+        last_interval = now - self.last_msg_time if hasattr(self, 'last_msg_time') else float('inf')
+
+        # Compute average (mean) interval between messages
         mean = sum(self.times) / len(self.times)
+
+        # Compute standard deviation of the message intervals
         stddev = statistics.stdev(self.times) if len(self.times) > 1 else 0.0
-        return 1.0 / mean, min(self.times), max(self.times), stddev, len(self.times)
+
+        # Convert mean interval to frequency (Hz = 1 / mean interval)
+        hz = 1.0 / mean
+
+        # If no message has arrived for twice the average interval, consider rate effectively zero
+        if last_interval > 2 * mean:  # threshold = 2 × mean interval
+            hz = 0.0
+
+        # Return the frequency and basic statistics
+        return hz, min(self.times), max(self.times), stddev, len(self.times)
+
+
+    # def get_hz(self):
+    #     if not self.enabled or len(self.times) == 0:
+    #         return None
+    #     if len(self.times) < 2:
+    #         return None
+    #     import statistics
+    #     mean = sum(self.times) / len(self.times)
+    #     stddev = statistics.stdev(self.times) if len(self.times) > 1 else 0.0
+    #     return 1.0 / mean, min(self.times), max(self.times), stddev, len(self.times)
 
     # def callback_hz(self, msg):
     #     # self.node.get_logger().info(

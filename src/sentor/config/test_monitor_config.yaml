@@ -75,9 +75,9 @@ monitors: #[]
   #   timeout: 10
   #   default_notifications: False
 
-  - name: "/chatter"
+  - name: "/chatter/safety_critical"
     message_type: "std_msgs/msg/String"
-    rate: 5
+    rate: 10
     N: 5
     qos:
       reliability: "reliable"
@@ -90,7 +90,7 @@ monitors: #[]
       safety_critical: true      # ← leave false if this “published” check shouldn’t gate safety‐beat
       autonomy_critical: true    # ← set true if you want mere “published” to gate warning‐beat
     signal_lambdas:
-    - expression: "lambda data: data == 'hello'"
+    - expression: "lambda data: data.data == 'hello'"
       timeout: 2.0
       safety_critical: false     # affects safety beat
       autonomy_critical: false   # doesn’t affect warning beat
@@ -101,6 +101,32 @@ monitors: #[]
     timeout: 10
     default_notifications: False
 
+# ros2 topic pub --rate 10 /chatter/safety_critical std_msgs/msg/String "{data: 'hello'}"
 
-# ros2 topic pub --rate 5 /chatter std_msgs/msg/String "{data: 'hello'}"
+  - name: "/chatter_autonomy_critical"
+    message_type: "std_msgs/msg/String"
+    rate: 10
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "volatile"
+      depth: 5
 
+    signal_when:
+      condition: "published"
+      timeout: 30
+      safety_critical: false      # ← leave false if this “published” check shouldn’t gate safety‐beat
+      autonomy_critical: true    # ← set true if you want mere “published” to gate warning‐beat
+    signal_lambdas:
+    - expression: "lambda data: data.data == 'hello'"
+      timeout: 2.0
+      safety_critical: false     # affects safety beat
+      autonomy_critical: false   # doesn’t affect warning beat
+      process_indices: [2]       # indexes into `execute` list (optional)
+      repeat_exec: false         # run every time satisfied?
+      tags: ["resolution"]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+# ros2 topic pub --rate 10 /chatter_autonomy_critical std_msgs/msg/String "{data: 'hello'}"

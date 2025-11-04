@@ -1,0 +1,138 @@
+monitors: #[]
+  # - name: "/example_topic"
+  #   message_type: "std_msgs/msg/Int32"
+  #   rate: 10
+  #   N: 5
+  #   qos:
+  #     reliability: "reliable"
+  #     durability: "volatile"
+  #     depth: 10
+  #   signal_when:
+  #     condition: "published"
+  #     timeout: 2.0
+  #     safety_critical: false
+  #   signal_lambdas:
+  #     - expression: "CustomLambda"
+  #       file: "CustomLambdaExample"
+  #       package: "sentor"
+  #       safety_critical: False
+  #       process_indices: [1]
+  #       repeat_exec: False
+  #       tags: ["navigation"]
+  #       when_published: False
+  #   execute:
+  #     - log:
+  #         message: "Lambda condition met: value > 10 on /example_topic"
+  #         level: "warn"
+  #   default_notifications: true
+  #   enable_internal_logs: false
+
+  
+  # - name: "/not_published_topic"
+  #   message_type: "std_msgs/msg/Int32"
+  #   rate: 10
+  #   N: 5
+  #   qos:
+  #     reliability: "best effort"
+  #     durability: "volatile"
+  #     depth: 10
+  #   signal_when:
+  #     condition: "not published"
+  #     timeout: 2.0
+  #     safety_critical: false
+  #   signal_lambdas:
+  #     - expression: "lambda x: x.data > 10"
+  #       timeout: 3.0
+  #       safety_critical: true
+  #       autonomy_critical: false
+  #       tags: ["test"]
+  #       process_indices: [0]   # Add process indices here
+  #   execute:
+  #     - log:
+  #         message: "Lambda condition met: value > 10 on /example_topic"
+  #         level: "warn"
+  #   default_notifications: true
+  #   enable_internal_logs: false
+
+  # - name: "/test_topic_2"
+  #   message_type: "sensor_msgs/msg/Temperature"
+  #   rate: 2
+  #   N: 5
+  #   qos:
+  #     reliability: "best_effort"
+  #     durability: "transient_local"
+  #     depth: 5
+  #   signal_when:
+  #     condition: "published"
+  #     timeout: 2
+  #     safety_critical: False
+  #   signal_lambdas:
+  #     - expression: "lambda x: x.temperature < 15"
+  #       timeout: 2
+  #       safety_critical: True
+  #       process_indices: [2]
+  #   execute: []
+  #   timeout: 10
+  #   default_notifications: False
+
+  - name: "/front_camera/camera_info"
+    message_type: "sensor_msgs/msg/CameraInfo"
+    rate: 8
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "VOLATILE"
+      depth: 5
+
+    signal_when:
+      condition: "published"
+      timeout: 30
+      safety_critical: false     # ← leave false if this “published” check shouldn’t gate safety‐beat
+      autonomy_critical: false    # ← set true if you want mere “published” to gate warning‐beat
+
+    signal_lambdas:
+      - expression: "lambda x: x.height < 480"
+        timeout: 2
+        safety_critical: True     # ← height‐check lambda counts for safety‐beat
+        autonomy_critical: False  # ← but does *not* count for warning‐beat
+        process_indices: [2]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+  - name: "/back_camera/camera_info"
+    message_type: "sensor_msgs/msg/CameraInfo"
+    rate: 8
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "VOLATILE"
+      depth: 5
+    signal_when:
+      condition: "published"
+      timeout: 2
+      safety_critical: False
+      autonomy_critical: false
+    signal_lambdas:
+      - expression: "lambda x: x.height == 480"
+        timeout: 2
+        safety_critical: True
+        autonomy_critical: True
+        process_indices: [2]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+node_monitors:
+  - name: "front_camera_camera_controller"
+    timeout: 2.0
+    safety_critical: true
+    autonomy_critical: false
+
+  - name: "back_camera_camera_controller"
+    timeout: 1.0
+    safety_critical: false
+    autonomy_critical: true
+
+
+

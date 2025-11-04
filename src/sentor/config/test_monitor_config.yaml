@@ -1,0 +1,132 @@
+monitors: #[]
+  # - name: "/example_topic"
+  #   message_type: "std_msgs/msg/Int32"
+  #   rate: 10
+  #   N: 5
+  #   qos:
+  #     reliability: "reliable"
+  #     durability: "volatile"
+  #     depth: 10
+  #   signal_when:
+  #     condition: "published"
+  #     timeout: 2.0
+  #     safety_critical: false
+  #   signal_lambdas:
+  #     - expression: "CustomLambda"
+  #       file: "CustomLambdaExample"
+  #       package: "sentor"
+  #       safety_critical: False
+  #       process_indices: [1]
+  #       repeat_exec: False
+  #       tags: ["navigation"]
+  #       when_published: False
+  #   execute:
+  #     - log:
+  #         message: "Lambda condition met: value > 10 on /example_topic"
+  #         level: "warn"
+  #   default_notifications: true
+  #   enable_internal_logs: false
+
+  
+  # - name: "/not_published_topic"
+  #   message_type: "std_msgs/msg/Int32"
+  #   rate: 10
+  #   N: 5
+  #   qos:
+  #     reliability: "best effort"
+  #     durability: "volatile"
+  #     depth: 10
+  #   signal_when:
+  #     condition: "not published"
+  #     timeout: 2.0
+  #     safety_critical: false
+  #   signal_lambdas:
+  #     - expression: "lambda x: x.data > 10"
+  #       timeout: 3.0
+  #       safety_critical: true
+  #       autonomy_critical: false
+  #       tags: ["test"]
+  #       process_indices: [0]   # Add process indices here
+  #   execute:
+  #     - log:
+  #         message: "Lambda condition met: value > 10 on /example_topic"
+  #         level: "warn"
+  #   default_notifications: true
+  #   enable_internal_logs: false
+
+  # - name: "/test_topic_2"
+  #   message_type: "sensor_msgs/msg/Temperature"
+  #   rate: 2
+  #   N: 5
+  #   qos:
+  #     reliability: "best_effort"
+  #     durability: "transient_local"
+  #     depth: 5
+  #   signal_when:
+  #     condition: "published"
+  #     timeout: 2
+  #     safety_critical: False
+  #   signal_lambdas:
+  #     - expression: "lambda x: x.temperature < 15"
+  #       timeout: 2
+  #       safety_critical: True
+  #       process_indices: [2]
+  #   execute: []
+  #   timeout: 10
+  #   default_notifications: False
+
+  - name: "/chatter/safety_critical"
+    message_type: "std_msgs/msg/String"
+    rate: 10
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "volatile"
+      depth: 5
+
+    signal_when:
+      condition: "published"
+      timeout: 30
+      safety_critical: true      # ← leave false if this “published” check shouldn’t gate safety‐beat
+      autonomy_critical: true    # ← set true if you want mere “published” to gate warning‐beat
+    signal_lambdas:
+    - expression: "lambda data: data.data == 'hello'"
+      timeout: 2.0
+      safety_critical: false     # affects safety beat
+      autonomy_critical: false   # doesn’t affect warning beat
+      process_indices: [2]       # indexes into `execute` list (optional)
+      repeat_exec: false         # run every time satisfied?
+      tags: ["resolution"]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+# ros2 topic pub --rate 10 /chatter/safety_critical std_msgs/msg/String "{data: 'hello'}"
+
+  - name: "/chatter_autonomy_critical"
+    message_type: "std_msgs/msg/String"
+    rate: 10
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "volatile"
+      depth: 5
+
+    signal_when:
+      condition: "published"
+      timeout: 30
+      safety_critical: false      # ← leave false if this “published” check shouldn’t gate safety‐beat
+      autonomy_critical: true    # ← set true if you want mere “published” to gate warning‐beat
+    signal_lambdas:
+    - expression: "lambda data: data.data == 'hello'"
+      timeout: 2.0
+      safety_critical: false     # affects safety beat
+      autonomy_critical: false   # doesn’t affect warning beat
+      process_indices: [2]       # indexes into `execute` list (optional)
+      repeat_exec: false         # run every time satisfied?
+      tags: ["resolution"]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+# ros2 topic pub --rate 10 /chatter_autonomy_critical std_msgs/msg/String "{data: 'hello'}"

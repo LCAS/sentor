@@ -86,7 +86,7 @@ class TopicMonitor(Thread):
         # ------------------------------------------------------------------
 
         # frequency monitoring
-        self.hz_monitor = ROSTopicHz(self.node, self.topic_name, window_size=1000, throttle_val=self.N)
+        self.hz_monitor = ROSTopicHz(self.node, self.topic_name, window_size=20, throttle_val=self.N)
         self.hz_monitor.start_monitoring(self.msg_type, self.qos_profile)
 
         # periodic status checks
@@ -193,7 +193,7 @@ class TopicMonitor(Thread):
     def check_not_published(self):
         if self.signal_when_cfg.get("signal_when","")=="not published":
             stats = self.hz_monitor.get_hz()
-            if stats is None and not self.conditions["not published"]["satisfied"]:
+            if stats is None and not self.conditions["not published"]["satisfied"]:  # no messages received
                 self.conditions["not published"]["satisfied"] = True
                 if self.signal_when_cfg["default_notifications"]:
                     lvl = "error" if self.signal_when_cfg["safety_critical"] else "warn"

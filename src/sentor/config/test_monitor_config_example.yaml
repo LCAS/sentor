@@ -75,28 +75,64 @@ monitors: #[]
   #   timeout: 10
   #   default_notifications: False
 
-  - name: "/hunter_status"
-    message_type: "hunter_msgs/msg/HunterStatus"
-    rate: 10
+  - name: "/front_camera/camera_info"
+    message_type: "sensor_msgs/msg/CameraInfo"
+    rate: 8
     N: 5
     qos:
       reliability: "reliable"
-      durability: "volatile"
+      durability: "VOLATILE"
       depth: 5
 
     signal_when:
       condition: "published"
       timeout: 30
-      safety_critical: true      # ← leave false if this “published” check shouldn’t gate safety‐beat
-      autonomy_critical: true    # ← set true if you want mere “published” to gate warning‐beat
+      safety_critical: false     # ← leave false if this “published” check shouldn’t gate safety‐beat
+      autonomy_critical: false    # ← set true if you want mere “published” to gate warning‐beat
+
     signal_lambdas:
-    - expression: "lambda data: data.battery_voltage >= 20.0"
-      timeout: 2.0
-      safety_critical: false
-      autonomy_critical: false
-      process_indices: [2]       # Optional
-      repeat_exec: false         # Only execute once when condition is met
-      tags: ["battery_check"]
+      - expression: "lambda x: x.height < 480"
+        timeout: 2
+        safety_critical: True     # ← height‐check lambda counts for safety‐beat
+        autonomy_critical: False  # ← but does *not* count for warning‐beat
+        process_indices: [2]
     execute: []
     timeout: 10
     default_notifications: False
+
+  - name: "/back_camera/camera_info"
+    message_type: "sensor_msgs/msg/CameraInfo"
+    rate: 8
+    N: 5
+    qos:
+      reliability: "reliable"
+      durability: "VOLATILE"
+      depth: 5
+    signal_when:
+      condition: "published"
+      timeout: 2
+      safety_critical: False
+      autonomy_critical: false
+    signal_lambdas:
+      - expression: "lambda x: x.height == 480"
+        timeout: 2
+        safety_critical: True
+        autonomy_critical: True
+        process_indices: [2]
+    execute: []
+    timeout: 10
+    default_notifications: False
+
+node_monitors:
+  - name: "front_camera_camera_controller"
+    timeout: 2.0
+    safety_critical: true
+    autonomy_critical: false
+
+  - name: "back_camera_camera_controller"
+    timeout: 1.0
+    safety_critical: false
+    autonomy_critical: true
+
+
+

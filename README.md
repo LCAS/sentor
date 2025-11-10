@@ -2,6 +2,11 @@
 
 Continuously monitor topic messages. Send warnings and execute other processes when certain conditions on the messages are satisfied. See the [wiki](https://github.com/LCAS/sentor/wiki/sentor).
 
+## Integration Documentation
+
+- **[Integration Summary](INTEGRATION_SUMMARY.md)** - Quick reference for integrating Sentor with RobotStateMachine and Nav2
+- **[Full Architecture Document](ARCHITECTURE_INTEGRATION.md)** - Comprehensive concept architecture for safe autonomous navigation
+
 # Sentor Monitoring Configuration
 
 This document explains how to structure your YAML config file for **Sentor**’s topic- and node-monitoring, and how the two “heartbeats” (`safety/heartbeat` and `warning/heartbeat`) are driven by your *safety-critical* and *autonomy-critical* flags.

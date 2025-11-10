@@ -4,8 +4,24 @@ Continuously monitor topic messages. Send warnings and execute other processes w
 
 ## Integration Documentation
 
-- **[Integration Summary](INTEGRATION_SUMMARY.md)** - Quick reference for integrating Sentor with RobotStateMachine and Nav2
-- **[Full Architecture Document](ARCHITECTURE_INTEGRATION.md)** - Comprehensive concept architecture for safe autonomous navigation
+For integrating Sentor with RobotStateMachine and Nav2 for safe autonomous navigation:
+
+- **[Integration Summary](INTEGRATION_SUMMARY.md)** - Quick reference guide (7KB, 5 min read)
+  - Core safety requirements and system overview
+  - Multi-layer safety approach
+  - Implementation checklist
+  
+- **[Full Architecture Document](ARCHITECTURE_INTEGRATION.md)** - Complete concept architecture (42KB, 30 min read)
+  - Detailed system architecture and component responsibilities
+  - Four integration strategies with pros/cons
+  - State transition handling and emergency stop behavior
+  - Phased implementation plan with code examples
+  - Testing strategy and failure mode analysis
+  
+- **[Integration Diagrams](docs/INTEGRATION_DIAGRAMS.md)** - Visual reference (22KB)
+  - ASCII diagrams for all major flows
+  - Timing diagrams and state machines
+  - Topic and service interactions
 
 # Sentor Monitoring Configuration
 

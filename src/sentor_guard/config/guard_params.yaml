@@ -1,0 +1,16 @@
+/**:
+  ros__parameters:
+    # Topics to monitor
+    state_topic: "/robot_state"
+    mode_topic: "/autonomous_mode"
+    safety_heartbeat_topic: "/safety/heartbeat"
+    warning_heartbeat_topic: "/warning/heartbeat"
+    
+    # Guard conditions
+    required_state: "active"
+    heartbeat_timeout: 1.0  # seconds
+    
+    # Which conditions to enforce
+    require_autonomous_mode: true
+    require_safety_heartbeat: true
+    require_warning_heartbeat: true

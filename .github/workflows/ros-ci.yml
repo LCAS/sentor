@@ -49,7 +49,7 @@ jobs:
     container:
       image: ${{ matrix.docker_image }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
           token: ${{ secrets.ORGA_GH_TOKEN }}

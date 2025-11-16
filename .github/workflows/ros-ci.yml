@@ -48,8 +48,13 @@ jobs:
 
     container:
       image: ${{ matrix.docker_image }}
+    if: ${{ github.owner == 'LCAS' }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.ORGA_GH_TOKEN }}
+          submodules: recursive
       - name: setup ROS environment
         uses: LCAS/setup-ros@master
         with:

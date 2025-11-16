@@ -17,7 +17,9 @@ public:
         declare_parameter("message_type", "");
         declare_parameter("required_state", "active");
         declare_parameter("heartbeat_timeout", 1.0);
-        
+    }
+    
+    void initialize() {
         // Get parameters
         std::string input_topic = get_parameter("input_topic").as_string();
         std::string output_topic = get_parameter("output_topic").as_string();
@@ -76,6 +78,7 @@ private:
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<TopicGuardNode>();
+    node->initialize();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

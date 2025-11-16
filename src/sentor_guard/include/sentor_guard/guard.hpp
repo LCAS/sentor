@@ -64,7 +64,7 @@ public:
      * 
      * @return String describing why autonomy is not allowed
      */
-    std::string getBlockingReason();
+    std::string getBlockingReason() const;
     
     /**
      * @brief Wait until autonomy is allowed
@@ -120,7 +120,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr safety_heartbeat_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr warning_heartbeat_sub_;
     
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     
     std::string current_state_;

@@ -2,6 +2,7 @@
 #include <lifecycle_msgs/srv/change_state.hpp>
 #include <lifecycle_msgs/msg/transition.hpp>
 #include "sentor_guard/guard.hpp"
+#include <map>
 
 /**
  * @brief Lifecycle Guard Node - manages lifecycle state of other nodes based on guard conditions
@@ -12,7 +13,9 @@ public:
         // Declare parameters
         declare_parameter("managed_nodes", std::vector<std::string>{});
         declare_parameter("check_rate", 10.0);
-        
+    }
+    
+    void initialize() {
         auto managed_nodes = get_parameter("managed_nodes").as_string_array();
         
         if (managed_nodes.empty()) {
@@ -93,6 +96,7 @@ private:
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<LifecycleGuardNode>();
+    node->initialize();
     rclcpp::spin(node);
     rclcpp::shutdown();
     return 0;

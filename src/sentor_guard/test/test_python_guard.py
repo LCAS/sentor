@@ -4,7 +4,7 @@ import unittest
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Bool
-from sentor_guard import SentorGuard, AutonomyGuardException
+from sentor_guard import SentorGuard, AutonomyGuardException, sentor_guarded
 import time
 
 
@@ -94,6 +94,121 @@ class TestSentorGuard(unittest.TestCase):
         """Test that timeout raises exception."""
         with self.assertRaises(AutonomyGuardException):
             self.guard.guarded_wait(timeout=0.1)
+
+
+class TestSentorGuardDecorator(unittest.TestCase):
+    """Test cases for @sentor_guarded decorator."""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Initialize ROS."""
+        if not rclpy.ok():
+            rclpy.init()
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.node = Node('test_decorator_node')
+        self.guard = SentorGuard(self.node, heartbeat_timeout=0.5)
+        
+        # Create test publishers
+        self.state_pub = self.node.create_publisher(String, '/robot_state', 10)
+        self.mode_pub = self.node.create_publisher(Bool, '/autonomous_mode', 10)
+        self.safety_pub = self.node.create_publisher(Bool, '/safety/heartbeat', 10)
+        self.warning_pub = self.node.create_publisher(Bool, '/warning/heartbeat', 10)
+        
+        time.sleep(0.1)  # Allow subscriptions to connect
+    
+    def tearDown(self):
+        """Clean up test fixtures."""
+        self.node.destroy_node()
+    
+    def _publish_all_conditions_met(self):
+        """Helper to publish all conditions as met."""
+        state_msg = String()
+        state_msg.data = 'active'
+        self.state_pub.publish(state_msg)
+        
+        mode_msg = Bool()
+        mode_msg.data = True
+        self.mode_pub.publish(mode_msg)
+        
+        hb_msg = Bool()
+        hb_msg.data = True
+        self.safety_pub.publish(hb_msg)
+        self.warning_pub.publish(hb_msg)
+        
+        rclpy.spin_once(self.node, timeout_sec=0.1)
+    
+    def test_decorator_with_timeout_blocks(self):
+        """Test that decorator raises exception on timeout."""
+        # Create a test class with guard attribute
+        class TestClass:
+            def __init__(self, guard):
+                self.guard = guard
+                self.called = False
+            
+            @sentor_guarded(timeout=0.1)
+            def guarded_method(self):
+                self.called = True
+        
+        test_obj = TestClass(self.guard)
+        
+        # Should raise exception since conditions are not met
+        with self.assertRaises(AutonomyGuardException):
+            test_obj.guarded_method()
+        
+        # Method should not have been called
+        self.assertFalse(test_obj.called)
+    
+    def test_decorator_allows_when_conditions_met(self):
+        """Test that decorator allows execution when conditions are met."""
+        # Publish all conditions as met
+        self._publish_all_conditions_met()
+        
+        # Create a test class with guard attribute
+        class TestClass:
+            def __init__(self, guard):
+                self.guard = guard
+                self.called = False
+            
+            @sentor_guarded(timeout=1.0)
+            def guarded_method(self):
+                self.called = True
+                return "success"
+        
+        test_obj = TestClass(self.guard)
+        
+        # Should execute successfully
+        result = test_obj.guarded_method()
+        
+        # Method should have been called
+        self.assertTrue(test_obj.called)
+        self.assertEqual(result, "success")
+    
+    def test_decorator_with_explicit_guard(self):
+        """Test decorator with explicit guard parameter."""
+        self._publish_all_conditions_met()
+        
+        called = [False]  # Use list to capture in closure
+        
+        @sentor_guarded(guard=self.guard, timeout=1.0)
+        def standalone_function():
+            called[0] = True
+            return "executed"
+        
+        result = standalone_function()
+        self.assertTrue(called[0])
+        self.assertEqual(result, "executed")
+    
+    def test_decorator_without_guard_raises_error(self):
+        """Test that decorator raises ValueError when no guard available."""
+        @sentor_guarded(timeout=0.1)
+        def no_guard_function():
+            pass
+        
+        # Should raise ValueError since no guard is available
+        with self.assertRaises(ValueError):
+            no_guard_function()
 
 
 if __name__ == '__main__':

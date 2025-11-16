@@ -135,6 +135,42 @@ else:
     log_warning(reason)
 ```
 
+### Pattern 5: Decorator (Python)
+
+The `@sentor_guarded` decorator provides a clean way to protect functions/methods:
+
+```python
+from sentor_guard import sentor_guarded
+
+class MyNode(Node):
+    def __init__(self):
+        super().__init__('my_node')
+        self.guard = SentorGuard(self)
+    
+    # Decorator without timeout (waits indefinitely)
+    @sentor_guarded()
+    def autonomous_action(self):
+        execute_navigation()
+    
+    # Decorator with timeout
+    @sentor_guarded(timeout=5.0)
+    def timed_action(self):
+        execute_task()
+
+# Can also use with explicit guard for standalone functions
+my_guard = SentorGuard(node)
+
+@sentor_guarded(guard=my_guard, timeout=10.0)
+def standalone_function():
+    execute_something()
+```
+
+The decorator:
+- Automatically checks guard conditions before executing the function
+- Raises `AutonomyGuardException` if conditions not met within timeout
+- Works with class methods (uses `self.guard`) or standalone functions (needs explicit guard)
+- Supports optional timeout parameter
+
 ## Nodes
 
 ### topic_guard_node

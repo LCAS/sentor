@@ -286,3 +286,67 @@ class SentorGuard:
                 raise AutonomyGuardException(
                     f"Autonomy not allowed: {reason}"
                 )
+
+
+def sentor_guarded(guard: SentorGuard = None, timeout: float = None):
+    """
+    Decorator that ensures a function only executes when guard conditions are met.
+    
+    This decorator can be used in two ways:
+    1. With a guard instance as an argument
+    2. As a method decorator in a class that has a 'guard' attribute
+    
+    Args:
+        guard: SentorGuard instance to check (optional if used on class methods)
+        timeout: Maximum time to wait for guard conditions (None = indefinite)
+    
+    Example:
+        # Using with explicit guard
+        @sentor_guarded(guard=my_guard, timeout=5.0)
+        def autonomous_action():
+            execute_navigation()
+        
+        # Using as method decorator (class must have self.guard)
+        class MyNode(Node):
+            def __init__(self):
+                self.guard = SentorGuard(self)
+            
+            @sentor_guarded()
+            def autonomous_action(self):
+                execute_navigation()
+    
+    Raises:
+        AutonomyGuardException: If guard conditions are not met within timeout
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # Try to get guard from arguments
+            guard_instance = guard
+            
+            # If no guard provided, try to get it from self (for class methods)
+            if guard_instance is None and len(args) > 0:
+                # Check if first argument (self) has a guard attribute
+                if hasattr(args[0], 'guard'):
+                    guard_instance = args[0].guard
+            
+            # If still no guard, raise an error
+            if guard_instance is None:
+                raise ValueError(
+                    "sentor_guarded decorator requires either a 'guard' parameter "
+                    "or to be used on a method of a class with a 'guard' attribute"
+                )
+            
+            # Check if guard conditions are met
+            if not isinstance(guard_instance, SentorGuard):
+                raise TypeError(
+                    f"Expected SentorGuard instance, got {type(guard_instance)}"
+                )
+            
+            # Wait for autonomy with the specified timeout
+            guard_instance.guarded_wait(timeout=timeout)
+            
+            # Execute the function if guard conditions are met
+            return func(*args, **kwargs)
+        
+        return wrapper
+    return decorator

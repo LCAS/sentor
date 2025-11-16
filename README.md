@@ -8,15 +8,23 @@ For integrating Sentor with RobotStateMachine and Nav2 for safe autonomous navig
 
 - **[Integration Summary](INTEGRATION_SUMMARY.md)** - Quick reference guide (7KB, 5 min read)
   - Core safety requirements and system overview
-  - Multi-layer safety approach
+  - Multi-layer safety approach with sentor_guard
   - Implementation checklist
   
-- **[Full Architecture Document](ARCHITECTURE_INTEGRATION.md)** - Complete concept architecture (42KB, 30 min read)
+- **[Full Architecture Document](ARCHITECTURE_INTEGRATION.md)** - Complete concept architecture (45KB, 30 min read)
   - Detailed system architecture and component responsibilities
   - Four integration strategies with pros/cons
   - State transition handling and emergency stop behavior
   - Phased implementation plan with code examples
   - Testing strategy and failure mode analysis
+  - sentor_guard package integration
+  
+- **[sentor_guard Package Design](docs/SENTOR_GUARD_DESIGN.md)** - Reusable safety libraries (52KB, 40 min read)
+  - Python and C++ guard libraries (context managers, RAII)
+  - Topic guard node for transparent filtering
+  - Lifecycle guard node for automatic state management
+  - Complete code examples and usage patterns
+  - Configuration and launch file templates
   
 - **[Integration Diagrams](docs/INTEGRATION_DIAGRAMS.md)** - Visual reference (22KB)
   - ASCII diagrams for all major flows

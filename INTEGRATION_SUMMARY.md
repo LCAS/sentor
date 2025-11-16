@@ -30,6 +30,7 @@ Any violation must immediately stop the robot and cancel navigation.
 | **RobotStateMachine** | Manages robot operational state and mode | `/robot_state`, `/autonomous_mode` |
 | **Sentor** | Monitors system health | `/safety/heartbeat`, `/warning/heartbeat` |
 | **Safety Controller** (NEW) | Coordinates safety conditions with Nav2 | Lifecycle management, goal cancellation |
+| **sentor_guard** (NEW) | Reusable safety libraries and nodes | Python/C++ guards, topic filters, lifecycle mgmt |
 | **Nav2** | Autonomous navigation | Navigation goals, motion commands |
 
 ---
@@ -54,19 +55,27 @@ Sentor ─────────────┘
 
 ### Layer 1: Lifecycle Management (Primary)
 - Safety Controller activates/deactivates Nav2 based on safety conditions
+- Uses **sentor_guard** libraries for condition checking
 - Clean, well-defined ROS2 pattern
 - ~100-500ms response time
 
 ### Layer 2: Behavior Tree Integration (Secondary)
 - Custom BT plugins check safety conditions within Nav2
+- Can use **sentor_guard** C++ library internally
 - Faster response (~50-100ms)
 - Requires Nav2 customization
 
 ### Layer 3: cmd_vel Filter (Emergency Backup)
-- Filter node between Nav2 and robot base
+- **sentor_guard** Topic Guard node filters cmd_vel
 - Zeros velocity commands when unsafe
 - <50ms response time
 - Last line of defense
+
+### Additional: Application-Level Guards
+- **sentor_guard** Python/C++ libraries in user code
+- Context managers and RAII patterns
+- Blocks execution until safe
+- Defense in depth throughout the system
 
 ---
 
@@ -114,24 +123,27 @@ Sentor ─────────────┘
 
 ## Implementation Phases
 
-### Phase 1: Core Safety Controller (HIGH PRIORITY)
-- Create `sentor_safety_controller` package
-- Implement safety condition evaluation
-- Add Nav2 lifecycle management
-- Add goal cancellation capability
+### Phase 1: sentor_guard Package (HIGH PRIORITY)
+- Create **`sentor_guard`** package with reusable libraries
+- Implement Python guard library (context manager pattern)
+- Implement C++ guard library (RAII pattern)
+- Add topic guard node and lifecycle guard node
+- Include configuration examples and launch files
 
 ### Phase 2: Sentor Configuration (HIGH PRIORITY)
 - Create Nav2-specific monitoring configuration
 - Define which topics/nodes are safety-critical vs autonomy-critical
 - Set appropriate timeouts
 
-### Phase 3: Nav2 BT Plugin (MEDIUM PRIORITY)
-- Create custom BT condition nodes
-- Integrate safety checks into navigation logic
+### Phase 3: Safety Controller (HIGH PRIORITY)
+- Create `sentor_safety_controller` package
+- Use **sentor_guard** libraries for condition evaluation
+- Add Nav2 lifecycle management
+- Add goal cancellation capability
 
-### Phase 4: cmd_vel Filter (MEDIUM PRIORITY)
-- Create velocity filter as safety backup
-- Add telemetry and diagnostics
+### Phase 4: Nav2 BT Plugin (MEDIUM PRIORITY)
+- Create custom BT condition nodes using **sentor_guard**
+- Integrate safety checks into navigation logic
 
 ### Phase 5: Testing & Validation (HIGH PRIORITY)
 - Simulation testing
@@ -242,6 +254,8 @@ Before implementation, clarify:
 ## References
 
 - **Full Architecture Document**: [ARCHITECTURE_INTEGRATION.md](ARCHITECTURE_INTEGRATION.md)
+- **sentor_guard Package Design**: [docs/SENTOR_GUARD_DESIGN.md](docs/SENTOR_GUARD_DESIGN.md)
+- **Integration Diagrams**: [docs/INTEGRATION_DIAGRAMS.md](docs/INTEGRATION_DIAGRAMS.md)
 - **Sentor Documentation**: [README.md](README.md)
 - **RobotStateMachine**: https://github.com/LCAS/RobotStateMachine
 - **Nav2 Documentation**: https://docs.nav2.org/

@@ -28,6 +28,7 @@ Any violation of this condition must immediately stop robot motion and terminate
 8. [Implementation Recommendations](#implementation-recommendations)
 9. [Testing and Validation Strategy](#testing-and-validation-strategy)
 10. [Failure Modes and Mitigation](#failure-modes-and-mitigation)
+11. [Sentor Guard Package](#sentor-guard-package)
 
 ---
 
@@ -1140,11 +1141,95 @@ node_monitors:
 
 ---
 
+## Sentor Guard Package
+
+In addition to the centralized Safety Controller approach, a complementary **`sentor_guard`** package provides reusable libraries and nodes for implementing safety at multiple levels:
+
+### Package Components
+
+1. **Software Context Guards**
+   - Python and C++ guard libraries
+   - Used as context managers or explicit waits in application code
+   - Blocks execution until safety conditions are met
+   - Provides non-blocking checks for periodic operations
+
+2. **Topic Guard Nodes**
+   - Transparent topic forwarding with safety gating
+   - Only passes messages when conditions are satisfied
+   - No code changes required in existing systems
+   - Useful for filtering cmd_vel and other command topics
+
+3. **Lifecycle Guard Nodes**
+   - Manages lifecycle state of other nodes based on safety conditions
+   - Automatically activates/deactivates managed nodes
+   - Configurable through ROS parameters
+
+### Integration Approaches
+
+The sentor_guard package enables multiple integration patterns:
+
+- **Centralized**: Safety Controller uses guard libraries for condition checking
+- **Distributed**: Individual nodes use guards locally for defense in depth
+- **Topic-Level**: Topic guard nodes filter command streams transparently
+- **Hybrid**: Combine all approaches for maximum safety
+
+### Key Features
+
+- ROS parameter configuration with YAML examples
+- Context manager pattern (Python `with` statement, C++ RAII)
+- Timeout-based waiting with exceptions
+- Non-blocking status checks
+- Detailed blocking reason reporting
+- Comprehensive examples and tests
+
+For complete design documentation, see [docs/SENTOR_GUARD_DESIGN.md](docs/SENTOR_GUARD_DESIGN.md).
+
+### Usage Example (Python)
+
+```python
+from sentor_guard.guard import SentorGuard
+
+class MyRobotNode(Node):
+    def __init__(self):
+        super().__init__('my_robot')
+        self.guard = SentorGuard(self, required_state='active')
+        
+    def do_autonomous_action(self):
+        # Only executes when safe
+        with self.guard:
+            self.execute_navigation()
+```
+
+### Usage Example (C++)
+
+```cpp
+#include "sentor_guard/guard.hpp"
+
+class MyRobotNode : public rclcpp::Node {
+public:
+    MyRobotNode() : Node("my_robot"), guard_(shared_from_this()) {}
+    
+    void doAutonomousAction() {
+        // RAII guard - automatically waits
+        sentor_guard::SentorGuard::Guard guard(guard_);
+        executeNavigation();
+    }
+    
+private:
+    sentor_guard::SentorGuard guard_;
+};
+```
+
+The sentor_guard package provides the building blocks for implementing the safety strategies outlined in this architecture document, making it easy to add safety checks throughout the system.
+
+---
+
 ## Document Revision History
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-11-10 | GitHub Copilot | Initial concept architecture |
+| 1.1 | 2025-11-16 | GitHub Copilot | Added sentor_guard package design |
 
 ---
 
@@ -1152,12 +1237,15 @@ node_monitors:
 
 This concept architecture provides a comprehensive framework for integrating Sentor, RobotStateMachine, and Nav2 to ensure safe and compliant autonomous navigation. The key principles are:
 
-1. **Defense in Depth**: Multiple layers of safety (lifecycle, BT, velocity filter)
+1. **Defense in Depth**: Multiple layers of safety (lifecycle, BT, velocity filter, software guards)
 2. **Clear Responsibility**: Well-defined roles for each component
 3. **Fast Response**: Sub-500ms reaction to safety violations
 4. **Clean Integration**: Uses standard ROS2 patterns (lifecycle, actions, topics)
 5. **Extensibility**: Framework can accommodate additional safety requirements
+6. **Reusable Components**: sentor_guard package provides libraries for any ROS2 system
 
-The recommended implementation follows a phased approach, starting with the Safety Controller as the central coordination point, then adding additional layers for robustness. The system is designed to fail safe, with multiple independent mechanisms ensuring the robot stops when conditions are unsafe.
+The recommended implementation follows a phased approach, starting with the Safety Controller as the central coordination point, then adding additional layers for robustness. The new **sentor_guard** package provides reusable libraries and nodes that can be used both within the Safety Controller and distributed throughout the system for defense in depth.
 
-Next steps should focus on creating a minimal viable implementation of the Safety Controller and validating the approach in simulation before proceeding to hardware deployment.
+The system is designed to fail safe, with multiple independent mechanisms ensuring the robot stops when conditions are unsafe. The addition of software context guards allows developers to easily add safety checks at any point in their code, while topic guards provide transparent safety without code changes.
+
+Next steps should focus on implementing the sentor_guard package and creating a minimal viable implementation of the Safety Controller, then validating the approach in simulation before proceeding to hardware deployment.

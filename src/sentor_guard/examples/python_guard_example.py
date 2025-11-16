@@ -4,7 +4,7 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
-from sentor_guard import SentorGuard, AutonomyGuardException
+from sentor_guard import SentorGuard, AutonomyGuardException, sentor_guarded
 
 
 class GuardedNavigationNode(Node):
@@ -71,6 +71,22 @@ class GuardedNavigationNode(Node):
     def perform_action(self):
         """Placeholder for action execution."""
         self.get_logger().info("Performing action...")
+    
+    @sentor_guarded()
+    def decorator_example_no_timeout(self):
+        """Example using decorator without timeout (waits indefinitely)."""
+        self.get_logger().info("Decorator example: executing guarded action")
+        msg = Twist()
+        msg.linear.x = 1.0
+        self.cmd_vel_pub.publish(msg)
+    
+    @sentor_guarded(timeout=5.0)
+    def decorator_example_with_timeout(self):
+        """Example using decorator with timeout."""
+        self.get_logger().info("Decorator example with timeout: executing guarded action")
+        msg = Twist()
+        msg.linear.x = 0.8
+        self.cmd_vel_pub.publish(msg)
 
 
 def main():

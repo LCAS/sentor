@@ -113,7 +113,7 @@ bool SentorGuard::isAutonomyAllowed() {
     return condition_met_;
 }
 
-std::string SentorGuard::getBlockingReason() {
+std::string SentorGuard::getBlockingReason() const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto now = node_->get_clock()->now();
     

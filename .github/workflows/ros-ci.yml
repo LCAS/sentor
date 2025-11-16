@@ -48,7 +48,6 @@ jobs:
 
     container:
       image: ${{ matrix.docker_image }}
-    if: ${{ github.owner == 'LCAS' }}
     steps:
       - uses: actions/checkout@v3
         with:

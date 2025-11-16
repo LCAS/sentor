@@ -1,0 +1,3 @@
+[submodule "src/RobotStateMachine"]
+	path = src/RobotStateMachine
+	url = https://github.com/LCAS/RobotStateMachine.git

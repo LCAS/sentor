@@ -56,8 +56,9 @@ class TestSentorGuard(unittest.TestCase):
         self.safety_pub.publish(hb_msg)
         self.warning_pub.publish(hb_msg)
         
-        # Spin to process messages
-        rclpy.spin_once(self.node, timeout_sec=0.1)
+        # Spin multiple times to process all messages (4 subscriptions)
+        for _ in range(5):
+            rclpy.spin_once(self.node, timeout_sec=0.1)
         
         # Check that autonomy is allowed
         self.assertTrue(self.guard.is_autonomy_allowed())

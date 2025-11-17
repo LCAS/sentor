@@ -13,9 +13,18 @@ The `CheckAutonomyAllowed` behavior tree condition node continuously monitors se
 
 ## Files
 
+### Behavior Tree Examples
 - `navigate_with_guard.xml` - Full Nav2 behavior tree with continuous safety monitoring and recovery
 - `simple_nav_with_guard.xml` - Minimal example showing basic integration
+
+### Launch Files
 - `nav2_with_guard_launch.py` - Example launch file for Nav2 with sentor_guard
+
+### Test and Demo Scripts
+- `test_bt_integration.py` - Test script that publishes sample conditions to demonstrate guard behavior
+- `simple_guard_demo.py` - Standalone demo showing guard usage in application code
+
+### Documentation
 - `README.md` - This file
 
 ## Requirements
@@ -235,7 +244,48 @@ colcon build --packages-select behaviortree_cpp
 
 ## Testing
 
-Test the BT node behavior without full Nav2:
+### Test Scripts
+
+Two test scripts are provided to demonstrate and test the guard behavior:
+
+#### 1. Simple Guard Demo (`simple_guard_demo.py`)
+
+Demonstrates how the guard works in application code:
+
+```bash
+# Terminal 1 - Run the demo
+ros2 run sentor_guard simple_guard_demo.py
+
+# Terminal 2 - Publish safe conditions
+ros2 topic pub /robot_state std_msgs/String "data: 'active'" -1
+ros2 topic pub /autonomous_mode std_msgs/Bool "data: true" -1
+ros2 topic pub /safety/heartbeat std_msgs/Bool "data: true" -r 2
+ros2 topic pub /warning/heartbeat std_msgs/Bool "data: true" -r 2
+```
+
+This shows:
+- How the guard checks conditions
+- What happens when conditions are not met
+- How navigation resumes when conditions are satisfied
+
+#### 2. BT Integration Test (`test_bt_integration.py`)
+
+Publishes a sequence of test conditions to verify guard behavior:
+
+```bash
+# Run the test (it will publish various test conditions)
+ros2 run sentor_guard test_bt_integration.py
+```
+
+This script:
+- Publishes different combinations of conditions
+- Demonstrates pause/resume scenarios
+- Simulates realistic navigation conditions
+- Useful for testing the CheckAutonomyAllowed BT node
+
+### Manual Testing
+
+Test the BT node behavior manually:
 
 ```python
 # test_bt_node.py

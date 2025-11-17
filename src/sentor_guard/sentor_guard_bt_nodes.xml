@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<library path="sentor_guard_bt_nodes">
+  <class name="CheckAutonomyAllowed" 
+         type="sentor_guard::CheckAutonomyAllowed">
+    <description>
+      Checks if autonomous operation is allowed based on sentor guard conditions.
+      Returns SUCCESS when all conditions are met (robot state, autonomous mode, heartbeats),
+      FAILURE otherwise. Continuously monitors conditions enabling dynamic behavior.
+    </description>
+  </class>
+</library>

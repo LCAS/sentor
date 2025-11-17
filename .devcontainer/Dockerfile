@@ -29,5 +29,12 @@ FROM depbuilder AS final
 
 RUN pip install black flake8
 
-# add sudo without password
-ENV DEBIAN_FRONTEND=noninteractive
+# add user ros if it doesn't exist yet, and add them to the sudo group
+RUN id -u ros || adduser --disabled-password --uid 1000 --gecos "" ros \
+    && usermod -aG sudo ros
+
+# enable sudo without password for sudo group
+RUN echo "%sudo ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+USER ros
+

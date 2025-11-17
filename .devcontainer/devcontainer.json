@@ -11,7 +11,7 @@
 	},
 
 	// Runs ONCE when container is first created to set up automatic sourcing.
-    "postCreateCommand": "echo 'source /workspaces/sentor/install/setup.bash' >> ~/.bashrc",
+    //"postCreateCommand": "echo 'source /workspaces/sentor/install/setup.bash' >> ~/.bashrc",
 
 	// Runs EVERY TIME the container starts.
 	"postStartCommand": "/opt/entrypoint.sh /bin/true; .devcontainer/post-create.sh",

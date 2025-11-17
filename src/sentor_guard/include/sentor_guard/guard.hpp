@@ -43,12 +43,19 @@ public:
     };
 
     /**
+     * @brief Construct a new Sentor Guard object with default options
+     * 
+     * @param node ROS2 node to use for subscriptions
+     */
+    explicit SentorGuard(rclcpp::Node::SharedPtr node);
+    
+    /**
      * @brief Construct a new Sentor Guard object
      * 
      * @param node ROS2 node to use for subscriptions
      * @param options Configuration options
      */
-    explicit SentorGuard(rclcpp::Node::SharedPtr node, const Options& options = Options());
+    SentorGuard(rclcpp::Node::SharedPtr node, const Options& options);
     
     ~SentorGuard() = default;
 

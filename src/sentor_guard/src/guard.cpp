@@ -2,6 +2,10 @@
 
 namespace sentor_guard {
 
+SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node)
+    : SentorGuard(node, Options()) {
+}
+
 SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
     : node_(node), options_(options),
       last_safety_heartbeat_time_(node->get_clock()->now()),

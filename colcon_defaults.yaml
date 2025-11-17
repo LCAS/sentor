@@ -1,0 +1,4 @@
+test:
+  executor: sequential
+build:
+  symlink-install: true

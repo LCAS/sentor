@@ -59,11 +59,13 @@ Sentor ─────────────┘
 - Clean, well-defined ROS2 pattern
 - ~100-500ms response time
 
-### Layer 2: Behavior Tree Integration (Secondary)
-- Custom BT plugins check safety conditions within Nav2
-- Can use **sentor_guard** C++ library internally
-- Faster response (~50-100ms)
-- Requires Nav2 customization
+### Layer 2: Behavior Tree Integration (✅ Implemented)
+- `CheckAutonomyAllowed` BT condition node checks safety in Nav2
+- Uses **sentor_guard** C++ library for condition evaluation
+- Faster response (~50-100ms) with continuous monitoring
+- Enables graceful pause/resume of navigation
+- Integrates via standard BehaviorTree.CPP plugin mechanism
+- Example BTs and launch files provided in `sentor_guard/examples/nav2_examples/`
 
 ### Layer 3: cmd_vel Filter (Emergency Backup)
 - **sentor_guard** Topic Guard node filters cmd_vel
@@ -141,9 +143,13 @@ Sentor ─────────────┘
 - Add Nav2 lifecycle management
 - Add goal cancellation capability
 
-### Phase 4: Nav2 BT Plugin (MEDIUM PRIORITY)
-- Create custom BT condition nodes using **sentor_guard**
-- Integrate safety checks into navigation logic
+### Phase 4: Nav2 BT Plugin (✅ COMPLETED)
+- ✅ Created `CheckAutonomyAllowed` BT condition node
+- ✅ Integrated with **sentor_guard** C++ library
+- ✅ Added optional BehaviorTree.CPP dependency
+- ✅ Created example behavior tree XML files
+- ✅ Comprehensive integration documentation
+- See: `src/sentor_guard/examples/nav2_examples/`
 
 ### Phase 5: Testing & Validation (HIGH PRIORITY)
 - Simulation testing
@@ -213,6 +219,64 @@ node_monitors:
 4. **Standard Patterns**: Uses ROS2 lifecycle, actions, and topics
 5. **No Nav2 Modification**: Primary approach doesn't require Nav2 changes
 6. **Comprehensive Logging**: All state changes logged for analysis
+
+---
+
+## Quick Start: Using the Nav2 BT Integration
+
+The `CheckAutonomyAllowed` behavior tree condition node is now available for direct integration with Nav2. Here's how to use it:
+
+### 1. Build with BT support
+```bash
+# Install BehaviorTree.CPP if needed
+sudo apt install ros-$ROS_DISTRO-behaviortree-cpp
+
+# Build sentor_guard
+cd ~/ros2_ws
+colcon build --packages-select sentor_guard
+source install/setup.bash
+```
+
+### 2. Configure Nav2 to load the plugin
+
+Add to your `bt_navigator` parameters:
+```yaml
+bt_navigator:
+  ros__parameters:
+    plugin_lib_names:
+      # ... other Nav2 plugins ...
+      - sentor_guard_bt_nodes  # Add this line
+    default_nav_to_pose_bt_xml: /path/to/your/behavior_tree.xml
+```
+
+### 3. Use in your behavior tree
+
+Simple pre-navigation check:
+```xml
+<Sequence>
+  <CheckAutonomyAllowed required_state="active"/>
+  <ComputePathToPose goal="{goal}" path="{path}"/>
+  <FollowPath path="{path}"/>
+</Sequence>
+```
+
+Continuous monitoring with pause/resume:
+```xml
+<PipelineSequence>
+  <RateController hz="2.0">
+    <CheckAutonomyAllowed required_state="active"/>
+  </RateController>
+  <ComputePathToPose goal="{goal}" path="{path}"/>
+  <FollowPath path="{path}"/>
+</PipelineSequence>
+```
+
+### 4. See complete examples
+
+Full working examples with launch files and documentation:
+- `src/sentor_guard/examples/nav2_examples/navigate_with_guard.xml` - Complete BT with recovery
+- `src/sentor_guard/examples/nav2_examples/simple_nav_with_guard.xml` - Minimal example
+- `src/sentor_guard/examples/nav2_examples/README.md` - Detailed integration guide
 
 ---
 

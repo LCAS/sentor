@@ -105,6 +105,8 @@ ament_python_install_package(${PROJECT_NAME})
 # Install Python executables
 install(PROGRAMS
   examples/python_guard_example.py
+  examples/nav2_examples/test_bt_integration.py
+  examples/nav2_examples/simple_guard_demo.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -17,12 +17,16 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>lifecycle_msgs</depend>
+  <depend>sentor</depend>
   
   <!-- Optional: Nav2 BehaviorTree integration -->
   <depend>behaviortree_cpp</depend>
 
   <!-- Python setup -->
   <exec_depend>python3-yaml</exec_depend>
+  
+  <!-- Nav2 integration -->
+  <exec_depend>nav2_bt_navigator</exec_depend>
 
   <!-- Testing -->
   <test_depend>ament_lint_auto</test_depend>

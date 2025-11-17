@@ -209,6 +209,57 @@ ros2 run sentor_guard lifecycle_guard_node --ros-args \
   -p check_rate:=10.0
 ```
 
+## Nav2 Integration
+
+### BehaviorTree Condition Node
+
+The `CheckAutonomyAllowed` BT condition node enables direct integration with Nav2 behavior trees for safe autonomous navigation.
+
+**Features:**
+- Continuous safety monitoring during navigation
+- Graceful pause/resume when conditions change
+- Configurable via BT XML
+- Uses standard BehaviorTree.CPP plugin mechanism
+
+**Installation:**
+
+Install BehaviorTree.CPP if not already present:
+```bash
+sudo apt install ros-$ROS_DISTRO-behaviortree-cpp
+```
+
+Build with BT support:
+```bash
+colcon build --packages-select sentor_guard
+```
+
+**Usage in Nav2:**
+
+1. Add to bt_navigator plugin list in your Nav2 params YAML:
+```yaml
+bt_navigator:
+  ros__parameters:
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      # ... other plugins ...
+      - sentor_guard_bt_nodes  # Add this
+```
+
+2. Use in behavior tree XML:
+```xml
+<Sequence>
+  <CheckAutonomyAllowed 
+    name="SafetyCheck"
+    required_state="active"
+    heartbeat_timeout="1000"/>
+  <NavigateToPose goal="{goal}"/>
+</Sequence>
+```
+
+For complete examples and integration patterns, see:
+- [examples/nav2_examples/](examples/nav2_examples/) - Example BT XMLs and launch files
+- [examples/nav2_examples/README.md](examples/nav2_examples/README.md) - Detailed integration guide
+
 ## Testing
 
 Run tests:

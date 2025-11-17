@@ -13,6 +13,16 @@ find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
 
+# Optional: BehaviorTree.CPP for Nav2 integration
+find_package(behaviortree_cpp QUIET)
+if(behaviortree_cpp_FOUND)
+  message(STATUS "BehaviorTree.CPP found - building BT plugin")
+  set(BUILD_BT_PLUGIN TRUE)
+else()
+  message(STATUS "BehaviorTree.CPP not found - skipping BT plugin")
+  set(BUILD_BT_PLUGIN FALSE)
+endif()
+
 # Include directories
 include_directories(include)
 
@@ -45,6 +55,31 @@ ament_target_dependencies(lifecycle_guard_node
   std_msgs
 )
 target_link_libraries(lifecycle_guard_node ${PROJECT_NAME})
+
+# BehaviorTree.CPP Plugin for Nav2 integration
+if(BUILD_BT_PLUGIN)
+  add_library(sentor_guard_bt_nodes SHARED
+    src/bt_condition_node.cpp
+  )
+  ament_target_dependencies(sentor_guard_bt_nodes
+    rclcpp
+    std_msgs
+    behaviortree_cpp
+  )
+  target_link_libraries(sentor_guard_bt_nodes ${PROJECT_NAME})
+  
+  # Install BT plugin library
+  install(TARGETS sentor_guard_bt_nodes
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+  )
+  
+  # Install BT plugin description
+  install(FILES sentor_guard_bt_nodes.xml
+    DESTINATION share/${PROJECT_NAME}
+  )
+endif()
 
 # Install C++ libraries and executables
 install(TARGETS
@@ -89,6 +124,7 @@ install(DIRECTORY
 install(DIRECTORY
   examples
   DESTINATION share/${PROJECT_NAME}
+  PATTERN "*.pyc" EXCLUDE
 )
 
 if(BUILD_TESTING)
@@ -97,10 +133,27 @@ if(BUILD_TESTING)
   
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_python_guard test/test_python_guard.py)
+  
+  # C++ tests for BT condition node (only if BT.CPP is available)
+  if(BUILD_BT_PLUGIN)
+    find_package(ament_cmake_gtest REQUIRED)
+    ament_add_gtest(test_bt_condition_node test/test_bt_condition_node.cpp)
+    target_link_libraries(test_bt_condition_node sentor_guard_bt_nodes)
+    ament_target_dependencies(test_bt_condition_node
+      rclcpp
+      std_msgs
+      behaviortree_cpp
+    )
+  endif()
 endif()
 
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME})
 ament_export_dependencies(rclcpp std_msgs lifecycle_msgs)
+
+if(BUILD_BT_PLUGIN)
+  ament_export_libraries(sentor_guard_bt_nodes)
+  ament_export_dependencies(behaviortree_cpp)
+endif()
 
 ament_package()

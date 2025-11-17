@@ -17,6 +17,9 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>lifecycle_msgs</depend>
+  
+  <!-- Optional: Nav2 BehaviorTree integration -->
+  <depend condition="$ROS_BT_PLUGIN">behaviortree_cpp</depend>
 
   <!-- Python setup -->
   <exec_depend>python3-yaml</exec_depend>

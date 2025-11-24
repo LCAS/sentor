@@ -15,8 +15,8 @@ namespace sentor_guard
  * @brief BehaviorTree condition node that checks sentor guard status
  * 
  * This condition node continuously checks if autonomy is allowed based on
- * sentor guard conditions. It returns SUCCESS when autonomy is allowed and
- * FAILURE otherwise.
+ * RobotStateMachine state and mode. It returns SUCCESS when autonomy is 
+ * allowed and FAILURE otherwise.
  * 
  * This enables behavior trees to respond to safety conditions in real-time,
  * allowing navigation to pause when conditions are not met and resume when
@@ -27,10 +27,8 @@ namespace sentor_guard
  * <CheckAutonomyAllowed 
  *   state_topic="/robot_state"
  *   mode_topic="/autonomous_mode"
- *   safety_heartbeat_topic="/safety/heartbeat"
- *   warning_heartbeat_topic="/warning/heartbeat"
  *   required_state="active"
- *   heartbeat_timeout="1000"/>
+ *   update_timeout="1000"/>
  * @endcode
  */
 class CheckAutonomyAllowed : public BT::ConditionNode
@@ -67,13 +65,9 @@ private:
   // Configuration
   std::string state_topic_;
   std::string mode_topic_;
-  std::string safety_heartbeat_topic_;
-  std::string warning_heartbeat_topic_;
   std::string required_state_;
-  std::chrono::milliseconds heartbeat_timeout_;
+  std::chrono::milliseconds update_timeout_;
   bool require_autonomous_mode_;
-  bool require_safety_heartbeat_;
-  bool require_warning_heartbeat_;
 };
 
 /**

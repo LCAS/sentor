@@ -6,7 +6,7 @@
   safety conditions and only allows navigation when all conditions are met.
   
   Key features:
-  - Checks robot state, autonomous mode, and heartbeats before navigation
+  - Checks robot state and autonomous mode before navigation
   - Navigation pauses automatically when conditions are not met
   - Resumes navigation when conditions are satisfied
   - Provides graceful degradation instead of abrupt failures
@@ -25,13 +25,9 @@
         name="CheckSafetyConditions"
         state_topic="/robot_state"
         mode_topic="/autonomous_mode"
-        safety_heartbeat_topic="/safety/heartbeat"
-        warning_heartbeat_topic="/warning/heartbeat"
         required_state="active"
-        heartbeat_timeout="1000"
-        require_autonomous_mode="true"
-        require_safety_heartbeat="true"
-        require_warning_heartbeat="true"/>
+        update_timeout="1000"
+        require_autonomous_mode="true"/>
       
       <!-- If conditions are met, proceed with navigation -->
       <RecoveryNode number_of_retries="6" name="NavigateRecovery">

@@ -27,8 +27,6 @@ protected:
     // Create publishers for test topics
     state_pub_ = test_node_->create_publisher<std_msgs::msg::String>("/robot_state", 10);
     mode_pub_ = test_node_->create_publisher<std_msgs::msg::Bool>("/autonomous_mode", 10);
-    safety_pub_ = test_node_->create_publisher<std_msgs::msg::Bool>("/safety/heartbeat", 10);
-    warning_pub_ = test_node_->create_publisher<std_msgs::msg::Bool>("/warning/heartbeat", 10);
     
     // Wait for subscriptions to connect
     std::this_thread::sleep_for(100ms);
@@ -50,11 +48,6 @@ protected:
     mode_msg.data = true;
     mode_pub_->publish(mode_msg);
     
-    auto hb_msg = std_msgs::msg::Bool();
-    hb_msg.data = true;
-    safety_pub_->publish(hb_msg);
-    warning_pub_->publish(hb_msg);
-    
     // Spin to process messages
     rclcpp::spin_some(test_node_);
     std::this_thread::sleep_for(100ms);
@@ -73,8 +66,6 @@ protected:
   rclcpp::Node::SharedPtr test_node_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr mode_pub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr safety_pub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr warning_pub_;
 };
 
 TEST_F(TestBTConditionNode, FactoryCreation)
@@ -113,7 +104,7 @@ TEST_F(TestBTConditionNode, AllConditionsMetReturnsSuccess)
   auto tree = factory.createTreeFromText(R"(
     <root BTCPP_format="4">
       <BehaviorTree>
-        <CheckAutonomyAllowed name="test" heartbeat_timeout="500"/>
+        <CheckAutonomyAllowed name="test" update_timeout="500"/>
       </BehaviorTree>
     </root>
   )");
@@ -163,10 +154,6 @@ TEST_F(TestBTConditionNode, CustomTopicsWork)
     "/custom/state", 10);
   auto custom_mode_pub = test_node_->create_publisher<std_msgs::msg::Bool>(
     "/custom/mode", 10);
-  auto custom_safety_pub = test_node_->create_publisher<std_msgs::msg::Bool>(
-    "/custom/safety", 10);
-  auto custom_warning_pub = test_node_->create_publisher<std_msgs::msg::Bool>(
-    "/custom/warning", 10);
   
   std::this_thread::sleep_for(100ms);
   
@@ -183,10 +170,8 @@ TEST_F(TestBTConditionNode, CustomTopicsWork)
           name="test"
           state_topic="/custom/state"
           mode_topic="/custom/mode"
-          safety_heartbeat_topic="/custom/safety"
-          warning_heartbeat_topic="/custom/warning"
           required_state="running"
-          heartbeat_timeout="500"/>
+          update_timeout="500"/>
       </BehaviorTree>
     </root>
   )");
@@ -199,11 +184,6 @@ TEST_F(TestBTConditionNode, CustomTopicsWork)
   auto mode_msg = std_msgs::msg::Bool();
   mode_msg.data = true;
   custom_mode_pub->publish(mode_msg);
-  
-  auto hb_msg = std_msgs::msg::Bool();
-  hb_msg.data = true;
-  custom_safety_pub->publish(hb_msg);
-  custom_warning_pub->publish(hb_msg);
   
   rclcpp::spin_some(test_node_);
   std::this_thread::sleep_for(150ms);
@@ -226,7 +206,7 @@ TEST_F(TestBTConditionNode, ContinuousCheckingRespondsToChanges)
   auto tree = factory.createTreeFromText(R"(
     <root BTCPP_format="4">
       <BehaviorTree>
-        <CheckAutonomyAllowed name="test" heartbeat_timeout="500"/>
+        <CheckAutonomyAllowed name="test" update_timeout="500"/>
       </BehaviorTree>
     </root>
   )");

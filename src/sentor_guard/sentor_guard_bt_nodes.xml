@@ -3,8 +3,8 @@
   <class name="CheckAutonomyAllowed" 
          type="sentor_guard::CheckAutonomyAllowed">
     <description>
-      Checks if autonomous operation is allowed based on sentor guard conditions.
-      Returns SUCCESS when all conditions are met (robot state, autonomous mode, heartbeats),
+      Checks if autonomous operation is allowed based on RobotStateMachine state and mode.
+      Returns SUCCESS when all conditions are met (robot state active, autonomous mode true),
       FAILURE otherwise. Continuously monitors conditions enabling dynamic behavior.
     </description>
   </class>

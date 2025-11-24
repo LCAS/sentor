@@ -15,7 +15,7 @@
       <CheckAutonomyAllowed 
         name="CheckBeforeNav"
         required_state="active"
-        heartbeat_timeout="1000"/>
+        update_timeout="1000"/>
       
       <!-- If safe, compute path and follow it -->
       <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>

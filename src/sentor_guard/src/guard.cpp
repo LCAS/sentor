@@ -1,4 +1,6 @@
 #include "sentor_guard/guard.hpp"
+#include "sentor_guard/msg/guard_status.hpp"
+#include <rclcpp/serialization.hpp>
 
 namespace sentor_guard {
 
@@ -19,6 +21,10 @@ SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
     mode_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         options_.mode_topic, 10,
         std::bind(&SentorGuard::modeCallback, this, std::placeholders::_1));
+    
+    // Create publisher for blocking status
+    status_publisher_ = node_->create_publisher<rclcpp::SerializedMessage>(
+        "/sentor_guard/blocking_reason", 10);
     
     RCLCPP_INFO(node_->get_logger(),
         "SentorGuard initialized: required_state='%s', update_timeout=%ldms",
@@ -120,8 +126,89 @@ std::string SentorGuard::getBlockingReason() const {
     return "Unknown reason";
 }
 
+std::vector<std::string> SentorGuard::getTruncatedCallStack(int max_frames) {
+    std::vector<std::string> result;
+    
+    #ifdef __GNUC__
+    void* addresses[max_frames + 5];  // Extra frames to skip
+    int size = backtrace(addresses, max_frames + 5);
+    char** symbols = backtrace_symbols(addresses, size);
+    
+    // Skip first 3 frames (this function and guard methods)
+    for (int i = 3; i < std::min(size, max_frames + 3); ++i) {
+        std::string frame = symbols[i];
+        
+        // Try to demangle C++ symbols
+        size_t begin = frame.find('(');
+        size_t end = frame.find('+', begin);
+        if (begin != std::string::npos && end != std::string::npos) {
+            std::string mangled = frame.substr(begin + 1, end - begin - 1);
+            int status;
+            char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+            if (status == 0 && demangled) {
+                result.push_back(demangled);
+                free(demangled);
+            } else {
+                result.push_back(frame);
+            }
+        } else {
+            result.push_back(frame);
+        }
+    }
+    
+    free(symbols);
+    #else
+    result.push_back("Call stack not available on this platform");
+    #endif
+    
+    return result;
+}
+
+void SentorGuard::publishBlockingStatus(bool is_blocking, const std::vector<std::string>& call_stack) {
+    if (!status_publisher_) {
+        return;
+    }
+    
+    try {
+        sentor_guard::msg::GuardStatus msg;
+        msg.node_name = node_->get_name();
+        msg.is_blocking = is_blocking;
+        
+        if (is_blocking) {
+            msg.blocking_reason = getBlockingReason();
+            msg.call_stack = call_stack;
+            auto now = node_->get_clock()->now();
+            msg.blocked_at = now;
+            msg.blocked_duration = 0.0;
+        } else {
+            // Guard is passing after being blocked
+            msg.blocking_reason = "";
+            msg.call_stack.clear();
+            if (is_currently_blocking_) {
+                auto now = node_->get_clock()->now();
+                auto duration = now - blocking_start_time_;
+                msg.blocked_duration = duration.seconds();
+                msg.blocked_at = blocking_start_time_;
+            } else {
+                msg.blocked_duration = 0.0;
+                msg.blocked_at = rclcpp::Time(0);
+            }
+        }
+        
+        // Serialize and publish
+        rclcpp::Serialization<sentor_guard::msg::GuardStatus> serializer;
+        rclcpp::SerializedMessage serialized_msg;
+        serializer.serialize_message(&msg, &serialized_msg);
+        status_publisher_->publish(serialized_msg);
+        
+    } catch (const std::exception& e) {
+        RCLCPP_WARN(node_->get_logger(), "Failed to publish blocking status: %s", e.what());
+    }
+}
+
 bool SentorGuard::waitForAutonomy(std::chrono::milliseconds timeout) {
     auto start = std::chrono::steady_clock::now();
+    bool first_block = true;
     
     while (rclcpp::ok()) {
         {
@@ -129,7 +216,22 @@ bool SentorGuard::waitForAutonomy(std::chrono::milliseconds timeout) {
             checkConditions();
             
             if (condition_met_) {
+                // If we were previously blocking, publish that we're now passing
+                if (is_currently_blocking_) {
+                    publishBlockingStatus(false);
+                    is_currently_blocking_ = false;
+                    blocking_call_stack_.clear();
+                }
                 return true;
+            }
+            
+            // We're blocking - publish status on first block
+            if (first_block) {
+                first_block = false;
+                is_currently_blocking_ = true;
+                blocking_start_time_ = node_->get_clock()->now();
+                blocking_call_stack_ = getTruncatedCallStack();
+                publishBlockingStatus(true, blocking_call_stack_);
             }
             
             if (timeout.count() > 0) {

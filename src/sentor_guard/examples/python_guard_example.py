@@ -14,13 +14,12 @@ class GuardedNavigationNode(Node):
         super().__init__('guarded_navigation_example')
         
         # Initialize guard
+        # Monitors /robot_state and /autonomous_mode from RobotStateMachine
         self.guard = SentorGuard(
             self,
             required_state='active',
-            heartbeat_timeout=1.0,
-            require_autonomous_mode=True,
-            require_safety_heartbeat=True,
-            require_warning_heartbeat=True
+            update_timeout=1.0,
+            require_autonomous_mode=True
         )
         
         # Create publisher

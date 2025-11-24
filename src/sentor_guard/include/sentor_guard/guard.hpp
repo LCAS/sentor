@@ -21,7 +21,10 @@ public:
 };
 
 /**
- * @brief Guard that checks sentor state and heartbeat before allowing execution
+ * @brief Guard that checks robot state and autonomous mode before allowing execution
+ * 
+ * Monitors /robot_state and /autonomous_mode topics from RobotStateMachine.
+ * The guard ensures these messages are recent (within update_timeout).
  * 
  * Can be used with RAII pattern via the Guard nested class.
  */
@@ -33,13 +36,9 @@ public:
     struct Options {
         std::string state_topic = "/robot_state";
         std::string mode_topic = "/autonomous_mode";
-        std::string safety_heartbeat_topic = "/safety/heartbeat";
-        std::string warning_heartbeat_topic = "/warning/heartbeat";
-        std::chrono::milliseconds heartbeat_timeout{1000};
+        std::chrono::milliseconds update_timeout{1000};
         std::string required_state = "active";
         bool require_autonomous_mode = true;
-        bool require_safety_heartbeat = true;
-        bool require_warning_heartbeat = true;
     };
 
     /**
@@ -114,8 +113,6 @@ public:
 private:
     void stateCallback(const std_msgs::msg::String::SharedPtr msg);
     void modeCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    void safetyHeartbeatCallback(const std_msgs::msg::Bool::SharedPtr msg);
-    void warningHeartbeatCallback(const std_msgs::msg::Bool::SharedPtr msg);
     
     void checkConditions();
     
@@ -124,18 +121,14 @@ private:
     
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr mode_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr safety_heartbeat_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr warning_heartbeat_sub_;
     
     mutable std::mutex mutex_;
     std::condition_variable cv_;
     
     std::string current_state_;
     bool autonomous_mode_{false};
-    bool safety_heartbeat_{false};
-    bool warning_heartbeat_{false};
-    rclcpp::Time last_safety_heartbeat_time_;
-    rclcpp::Time last_warning_heartbeat_time_;
+    rclcpp::Time last_state_time_;
+    rclcpp::Time last_mode_time_;
     bool condition_met_{false};
 };
 

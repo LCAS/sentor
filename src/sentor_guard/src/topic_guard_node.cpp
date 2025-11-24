@@ -16,7 +16,7 @@ public:
         declare_parameter("output_topic", "");
         declare_parameter("message_type", "");
         declare_parameter("required_state", "active");
-        declare_parameter("heartbeat_timeout", 1.0);
+        declare_parameter("update_timeout", 1.0);
     }
     
     void initialize() {
@@ -34,8 +34,8 @@ public:
         // Initialize guard
         sentor_guard::SentorGuard::Options guard_options;
         guard_options.required_state = get_parameter("required_state").as_string();
-        guard_options.heartbeat_timeout = std::chrono::milliseconds(
-            static_cast<int>(get_parameter("heartbeat_timeout").as_double() * 1000));
+        guard_options.update_timeout = std::chrono::milliseconds(
+            static_cast<int>(get_parameter("update_timeout").as_double() * 1000));
         
         guard_ = std::make_unique<sentor_guard::SentorGuard>(shared_from_this(), guard_options);
         

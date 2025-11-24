@@ -15,7 +15,10 @@ class AutonomyGuardException(Exception):
 
 class SentorGuard:
     """
-    Guard that checks sentor state and heartbeat before allowing execution.
+    Guard that checks robot state and autonomous mode before allowing execution.
+    
+    Monitors /robot_state and /autonomous_mode topics from RobotStateMachine.
+    The guard ensures these messages are recent (within update_timeout).
     
     Can be used as a context manager or called directly.
     
@@ -33,42 +36,30 @@ class SentorGuard:
     def __init__(self, node: Node, 
                  state_topic: str = '/robot_state',
                  mode_topic: str = '/autonomous_mode',
-                 safety_heartbeat_topic: str = '/safety/heartbeat',
-                 warning_heartbeat_topic: str = '/warning/heartbeat',
-                 heartbeat_timeout: float = 1.0,
+                 update_timeout: float = 1.0,
                  required_state: str = 'active',
-                 require_autonomous_mode: bool = True,
-                 require_safety_heartbeat: bool = True,
-                 require_warning_heartbeat: bool = True):
+                 require_autonomous_mode: bool = True):
         """
         Initialize the guard.
         
         Args:
             node: ROS2 node to use for subscriptions
-            state_topic: Topic publishing robot state
-            mode_topic: Topic publishing autonomous mode flag
-            safety_heartbeat_topic: Topic for safety heartbeat
-            warning_heartbeat_topic: Topic for warning heartbeat
-            heartbeat_timeout: Maximum age of heartbeat in seconds
-            required_state: State required for autonomy (e.g., 'active')
-            require_autonomous_mode: Whether autonomous mode must be true
-            require_safety_heartbeat: Whether safety heartbeat must be true
-            require_warning_heartbeat: Whether warning heartbeat must be true
+            state_topic: Topic publishing robot state (String: 'start-up', 'disabled', 'enabled', 'active')
+            mode_topic: Topic publishing autonomous mode flag (Bool)
+            update_timeout: Maximum age of state/mode messages in seconds
+            required_state: State required for autonomy (default: 'active')
+            require_autonomous_mode: Whether autonomous mode must be true (default: True)
         """
         self.node = node
-        self.heartbeat_timeout = Duration(seconds=heartbeat_timeout)
+        self.update_timeout = Duration(seconds=update_timeout)
         self.required_state = required_state
         self.require_autonomous_mode = require_autonomous_mode
-        self.require_safety_heartbeat = require_safety_heartbeat
-        self.require_warning_heartbeat = require_warning_heartbeat
         
         self._lock = Lock()
         self._current_state = None
         self._autonomous_mode = None
-        self._safety_heartbeat = None
-        self._warning_heartbeat = None
-        self._last_safety_heartbeat_time = None
-        self._last_warning_heartbeat_time = None
+        self._last_state_time = None
+        self._last_mode_time = None
         self._condition_met = Event()
         
         # Subscribe to state and mode topics
@@ -86,58 +77,53 @@ class SentorGuard:
             10
         )
         
-        # Subscribe to heartbeat topics
-        self._safety_heartbeat_sub = node.create_subscription(
-            Bool,
-            safety_heartbeat_topic,
-            self._safety_heartbeat_callback,
-            10
-        )
-        
-        self._warning_heartbeat_sub = node.create_subscription(
-            Bool,
-            warning_heartbeat_topic,
-            self._warning_heartbeat_callback,
-            10
-        )
-        
         self.node.get_logger().info(
             f"SentorGuard initialized: required_state='{required_state}', "
-            f"heartbeat_timeout={heartbeat_timeout}s"
+            f"update_timeout={update_timeout}s"
         )
     
     def _state_callback(self, msg):
         """Handle robot state updates."""
         with self._lock:
             self._current_state = msg.data
+            self._last_state_time = self.node.get_clock().now()
             self._check_conditions()
     
     def _mode_callback(self, msg):
         """Handle autonomous mode updates."""
         with self._lock:
             self._autonomous_mode = msg.data
-            self._check_conditions()
-    
-    def _safety_heartbeat_callback(self, msg):
-        """Handle safety heartbeat updates."""
-        with self._lock:
-            self._safety_heartbeat = msg.data
-            self._last_safety_heartbeat_time = self.node.get_clock().now()
-            self._check_conditions()
-    
-    def _warning_heartbeat_callback(self, msg):
-        """Handle warning heartbeat updates."""
-        with self._lock:
-            self._warning_heartbeat = msg.data
-            self._last_warning_heartbeat_time = self.node.get_clock().now()
+            self._last_mode_time = self.node.get_clock().now()
             self._check_conditions()
     
     def _check_conditions(self):
         """Check if all conditions are met."""
         now = self.node.get_clock().now()
         
-        # Check state
+        # Check if we have received state message
+        if self._current_state is None or self._last_state_time is None:
+            self._condition_met.clear()
+            return
+        
+        # Check if state message is recent
+        state_age = now - self._last_state_time
+        if state_age > self.update_timeout:
+            self._condition_met.clear()
+            return
+        
+        # Check state value
         if self._current_state != self.required_state:
+            self._condition_met.clear()
+            return
+        
+        # Check if we have received mode message
+        if self._autonomous_mode is None or self._last_mode_time is None:
+            self._condition_met.clear()
+            return
+        
+        # Check if mode message is recent
+        mode_age = now - self._last_mode_time
+        if mode_age > self.update_timeout:
             self._condition_met.clear()
             return
         
@@ -145,36 +131,6 @@ class SentorGuard:
         if self.require_autonomous_mode and not self._autonomous_mode:
             self._condition_met.clear()
             return
-        
-        # Check safety heartbeat
-        if self.require_safety_heartbeat:
-            if self._safety_heartbeat is None or not self._safety_heartbeat:
-                self._condition_met.clear()
-                return
-            
-            if self._last_safety_heartbeat_time is None:
-                self._condition_met.clear()
-                return
-            
-            age = now - self._last_safety_heartbeat_time
-            if age > self.heartbeat_timeout:
-                self._condition_met.clear()
-                return
-        
-        # Check warning heartbeat
-        if self.require_warning_heartbeat:
-            if self._warning_heartbeat is None or not self._warning_heartbeat:
-                self._condition_met.clear()
-                return
-            
-            if self._last_warning_heartbeat_time is None:
-                self._condition_met.clear()
-                return
-            
-            age = now - self._last_warning_heartbeat_time
-            if age > self.heartbeat_timeout:
-                self._condition_met.clear()
-                return
         
         # All conditions met
         self._condition_met.set()
@@ -200,29 +156,27 @@ class SentorGuard:
         with self._lock:
             now = self.node.get_clock().now()
             
+            # Check state
+            if self._current_state is None or self._last_state_time is None:
+                return "Robot state not received"
+            
+            state_age = now - self._last_state_time
+            if state_age > self.update_timeout:
+                return f"Robot state stale ({state_age.nanoseconds / 1e9:.2f}s old)"
+            
             if self._current_state != self.required_state:
                 return f"State is '{self._current_state}', required '{self.required_state}'"
             
+            # Check mode
+            if self._autonomous_mode is None or self._last_mode_time is None:
+                return "Autonomous mode not received"
+            
+            mode_age = now - self._last_mode_time
+            if mode_age > self.update_timeout:
+                return f"Autonomous mode stale ({mode_age.nanoseconds / 1e9:.2f}s old)"
+            
             if self.require_autonomous_mode and not self._autonomous_mode:
                 return "Autonomous mode is disabled"
-            
-            if self.require_safety_heartbeat:
-                if self._safety_heartbeat is None or not self._safety_heartbeat:
-                    return "Safety heartbeat is unhealthy or not received"
-                
-                if self._last_safety_heartbeat_time:
-                    age = now - self._last_safety_heartbeat_time
-                    if age > self.heartbeat_timeout:
-                        return f"Safety heartbeat stale ({age.nanoseconds / 1e9:.2f}s old)"
-            
-            if self.require_warning_heartbeat:
-                if self._warning_heartbeat is None or not self._warning_heartbeat:
-                    return "Warning heartbeat is unhealthy or not received"
-                
-                if self._last_warning_heartbeat_time:
-                    age = now - self._last_warning_heartbeat_time
-                    if age > self.heartbeat_timeout:
-                        return f"Warning heartbeat stale ({age.nanoseconds / 1e9:.2f}s old)"
             
             return "Unknown reason"
     

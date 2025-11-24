@@ -24,13 +24,11 @@ class TestSentorGuard(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.node = Node('test_guard_node')
-        self.guard = SentorGuard(self.node, heartbeat_timeout=0.5)
+        self.guard = SentorGuard(self.node, update_timeout=0.5)
         
         # Create test publishers
         self.state_pub = self.node.create_publisher(String, '/robot_state', 10)
         self.mode_pub = self.node.create_publisher(Bool, '/autonomous_mode', 10)
-        self.safety_pub = self.node.create_publisher(Bool, '/safety/heartbeat', 10)
-        self.warning_pub = self.node.create_publisher(Bool, '/warning/heartbeat', 10)
         
         time.sleep(0.1)  # Allow subscriptions to connect
     
@@ -50,14 +48,8 @@ class TestSentorGuard(unittest.TestCase):
         mode_msg.data = True
         self.mode_pub.publish(mode_msg)
         
-        # Publish heartbeats
-        hb_msg = Bool()
-        hb_msg.data = True
-        self.safety_pub.publish(hb_msg)
-        self.warning_pub.publish(hb_msg)
-        
-        # Spin multiple times to process all messages (4 subscriptions)
-        for _ in range(5):
+        # Spin to process messages
+        for _ in range(3):
             rclpy.spin_once(self.node, timeout_sec=0.1)
         
         # Check that autonomy is allowed
@@ -133,12 +125,9 @@ class TestSentorGuardDecorator(unittest.TestCase):
         mode_msg.data = True
         self.mode_pub.publish(mode_msg)
         
-        hb_msg = Bool()
-        hb_msg.data = True
-        self.safety_pub.publish(hb_msg)
-        self.warning_pub.publish(hb_msg)
-        
-        rclpy.spin_once(self.node, timeout_sec=0.1)
+        # Spin to process messages
+        for _ in range(3):
+            rclpy.spin_once(self.node, timeout_sec=0.1)
     
     def test_decorator_with_timeout_blocks(self):
         """Test that decorator raises exception on timeout."""

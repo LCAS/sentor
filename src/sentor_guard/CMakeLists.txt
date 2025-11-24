@@ -12,6 +12,8 @@ find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
+find_package(builtin_interfaces REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
 # Optional: BehaviorTree.CPP for Nav2 integration
 find_package(behaviortree_cpp QUIET)
@@ -23,17 +25,25 @@ else()
   set(BUILD_BT_PLUGIN FALSE)
 endif()
 
+# Generate ROS messages
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/GuardStatus.msg"
+  DEPENDENCIES builtin_interfaces
+)
+
 # Include directories
 include_directories(include)
 
 # C++ Guard Library
-add_library(${PROJECT_NAME} SHARED
+add_library(${PROJECT_NAME}_lib SHARED
   src/guard.cpp
 )
-ament_target_dependencies(${PROJECT_NAME}
+ament_target_dependencies(${PROJECT_NAME}_lib
   rclcpp
   std_msgs
 )
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(${PROJECT_NAME}_lib "${cpp_typesupport_target}")
 
 # C++ Topic Guard Node
 add_executable(topic_guard_node
@@ -43,7 +53,7 @@ ament_target_dependencies(topic_guard_node
   rclcpp
   std_msgs
 )
-target_link_libraries(topic_guard_node ${PROJECT_NAME})
+target_link_libraries(topic_guard_node ${PROJECT_NAME}_lib)
 
 # C++ Lifecycle Guard Node
 add_executable(lifecycle_guard_node
@@ -54,7 +64,7 @@ ament_target_dependencies(lifecycle_guard_node
   lifecycle_msgs
   std_msgs
 )
-target_link_libraries(lifecycle_guard_node ${PROJECT_NAME})
+target_link_libraries(lifecycle_guard_node ${PROJECT_NAME}_lib)
 
 # BehaviorTree.CPP Plugin for Nav2 integration
 if(BUILD_BT_PLUGIN)
@@ -66,7 +76,7 @@ if(BUILD_BT_PLUGIN)
     std_msgs
     behaviortree_cpp
   )
-  target_link_libraries(sentor_guard_bt_nodes ${PROJECT_NAME})
+  target_link_libraries(sentor_guard_bt_nodes ${PROJECT_NAME}_lib)
   
   # Install BT plugin library
   install(TARGETS sentor_guard_bt_nodes
@@ -83,7 +93,7 @@ endif()
 
 # Install C++ libraries and executables
 install(TARGETS
-  ${PROJECT_NAME}
+  ${PROJECT_NAME}_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -150,8 +160,14 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_include_directories(include)
-ament_export_libraries(${PROJECT_NAME})
-ament_export_dependencies(rclcpp std_msgs lifecycle_msgs)
+ament_export_libraries(${PROJECT_NAME}_lib)
+ament_export_dependencies(
+  rosidl_default_runtime
+  rclcpp
+  std_msgs
+  lifecycle_msgs
+  builtin_interfaces
+)
 
 if(BUILD_BT_PLUGIN)
   ament_export_libraries(sentor_guard_bt_nodes)

@@ -6,6 +6,7 @@ from rclpy.time import Time, Duration
 from std_msgs.msg import String, Bool
 from threading import Event, Lock
 import time
+import traceback
 
 
 class AutonomyGuardException(Exception):
@@ -62,6 +63,11 @@ class SentorGuard:
         self._last_mode_time = None
         self._condition_met = Event()
         
+        # Tracking for blocking status
+        self._is_currently_blocking = False
+        self._blocking_start_time = None
+        self._blocking_call_stack = None
+        
         # Subscribe to state and mode topics
         self._state_sub = node.create_subscription(
             String,
@@ -76,6 +82,21 @@ class SentorGuard:
             self._mode_callback,
             10
         )
+        
+        # Publisher for blocking status
+        # Import message type dynamically to avoid circular dependencies
+        try:
+            from sentor_guard.msg import GuardStatus
+            self._status_publisher = node.create_publisher(
+                GuardStatus,
+                '/sentor_guard/blocking_reason',
+                10
+            )
+        except ImportError:
+            self.node.get_logger().warn(
+                "GuardStatus message not available - blocking status will not be published"
+            )
+            self._status_publisher = None
         
         self.node.get_logger().info(
             f"SentorGuard initialized: required_state='{required_state}', "
@@ -180,6 +201,76 @@ class SentorGuard:
             
             return "Unknown reason"
     
+    def _publish_blocking_status(self, is_blocking: bool, call_stack: list = None):
+        """
+        Publish blocking status message.
+        
+        Args:
+            is_blocking: True if guard is blocking, False if it just passed
+            call_stack: List of call stack frames (optional)
+        """
+        if self._status_publisher is None:
+            return
+        
+        try:
+            from sentor_guard.msg import GuardStatus
+            from builtin_interfaces.msg import Time as TimeMsg
+            
+            msg = GuardStatus()
+            msg.node_name = self.node.get_name()
+            msg.is_blocking = is_blocking
+            
+            if is_blocking:
+                msg.blocking_reason = self.get_blocking_reason()
+                msg.call_stack = call_stack if call_stack else []
+                now = self.node.get_clock().now()
+                msg.blocked_at = TimeMsg(
+                    sec=now.seconds_nanoseconds()[0],
+                    nanosec=now.seconds_nanoseconds()[1]
+                )
+                msg.blocked_duration = 0.0
+            else:
+                # Guard is passing after being blocked
+                msg.blocking_reason = ""
+                msg.call_stack = []
+                if self._blocking_start_time:
+                    now = self.node.get_clock().now()
+                    duration = now - self._blocking_start_time
+                    msg.blocked_duration = duration.nanoseconds / 1e9
+                    msg.blocked_at = TimeMsg(
+                        sec=self._blocking_start_time.seconds_nanoseconds()[0],
+                        nanosec=self._blocking_start_time.seconds_nanoseconds()[1]
+                    )
+                else:
+                    msg.blocked_duration = 0.0
+                    msg.blocked_at = TimeMsg()
+            
+            self._status_publisher.publish(msg)
+        except Exception as e:
+            self.node.get_logger().warn(f"Failed to publish blocking status: {e}")
+    
+    def _get_truncated_call_stack(self, max_frames: int = 10) -> list:
+        """
+        Get truncated call stack as list of strings.
+        
+        Args:
+            max_frames: Maximum number of frames to include
+            
+        Returns:
+            List of strings representing call stack frames
+        """
+        stack = traceback.extract_stack()
+        # Skip the last few frames (this function and the guard methods)
+        stack = stack[:-3]
+        # Take only the last max_frames
+        stack = stack[-max_frames:]
+        
+        result = []
+        for frame in stack:
+            result.append(f"{frame.filename}:{frame.lineno} in {frame.name}")
+        
+        return result
+    
     def wait_for_autonomy(self, timeout: float = None) -> bool:
         """
         Wait until autonomy is allowed.
@@ -191,10 +282,30 @@ class SentorGuard:
             True if autonomy is allowed, False if timeout occurred
         """
         start_time = time.time()
+        first_block = True
         
         while rclpy.ok():
-            if self.is_autonomy_allowed():
+            is_allowed = self.is_autonomy_allowed()
+            
+            if is_allowed:
+                # If we were previously blocking, publish that we're now passing
+                if self._is_currently_blocking:
+                    self._publish_blocking_status(is_blocking=False)
+                    self._is_currently_blocking = False
+                    self._blocking_start_time = None
+                    self._blocking_call_stack = None
                 return True
+            
+            # We're blocking - publish status on first block
+            if first_block:
+                first_block = False
+                self._is_currently_blocking = True
+                self._blocking_start_time = self.node.get_clock().now()
+                self._blocking_call_stack = self._get_truncated_call_stack()
+                self._publish_blocking_status(
+                    is_blocking=True,
+                    call_stack=self._blocking_call_stack
+                )
             
             if timeout is not None:
                 elapsed = time.time() - start_time

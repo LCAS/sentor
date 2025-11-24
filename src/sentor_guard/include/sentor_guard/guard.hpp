@@ -8,6 +8,9 @@
 #include <memory>
 #include <string>
 #include <chrono>
+#include <vector>
+#include <execinfo.h>
+#include <cxxabi.h>
 
 namespace sentor_guard {
 
@@ -115,12 +118,15 @@ private:
     void modeCallback(const std_msgs::msg::Bool::SharedPtr msg);
     
     void checkConditions();
+    void publishBlockingStatus(bool is_blocking, const std::vector<std::string>& call_stack = {});
+    std::vector<std::string> getTruncatedCallStack(int max_frames = 10);
     
     rclcpp::Node::SharedPtr node_;
     Options options_;
     
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr mode_sub_;
+    rclcpp::Publisher<rclcpp::SerializedMessage>::SharedPtr status_publisher_;
     
     mutable std::mutex mutex_;
     std::condition_variable cv_;
@@ -130,6 +136,11 @@ private:
     rclcpp::Time last_state_time_;
     rclcpp::Time last_mode_time_;
     bool condition_met_{false};
+    
+    // Blocking status tracking
+    bool is_currently_blocking_{false};
+    rclcpp::Time blocking_start_time_;
+    std::vector<std::string> blocking_call_stack_;
 };
 
 } // namespace sentor_guard

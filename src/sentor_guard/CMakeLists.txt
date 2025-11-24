@@ -109,8 +109,8 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-# Install Python modules
-ament_python_install_package(${PROJECT_NAME})
+# Install Python modules (handled by setup.py via ament_cmake_python)
+# Note: ament_python_install_package is not needed when setup.py exists
 
 # Install Python executables
 install(PROGRAMS

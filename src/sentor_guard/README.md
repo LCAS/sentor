@@ -1,14 +1,20 @@
 # sentor_guard
 
-Safety guard libraries and nodes for sentor-based autonomous systems.
+Safety guard libraries and nodes for RobotStateMachine-based autonomous systems.
 
 ## Overview
 
-The `sentor_guard` package provides reusable components for implementing safe autonomous behavior by integrating sentor's state monitoring with robot control systems. It offers three complementary approaches:
+The `sentor_guard` package provides reusable components for implementing safe autonomous behavior by monitoring the robot state and autonomous mode from RobotStateMachine. It offers three complementary approaches:
 
 1. **Software Context Guards** - Python and C++ libraries for inline safety checks
 2. **Topic Guards** - Transparent topic forwarding with safety gating
 3. **Lifecycle Guards** - Automatic lifecycle management of nodes based on safety conditions
+
+The guard monitors two topics published by RobotStateMachine:
+- `/robot_state` (String): One of 'start-up', 'disabled', 'enabled', 'active'
+- `/autonomous_mode` (Bool): TRUE in autonomous, FALSE in manual
+
+The guard ensures these messages are recent (within configurable timeout).
 
 ## Features
 
@@ -18,6 +24,7 @@ The `sentor_guard` package provides reusable components for implementing safe au
 - **Lifecycle Guard Node**: Manages lifecycle state of other nodes
 - **ROS Parameter Configuration**: Easy configuration via YAML files
 - **Multiple Usage Patterns**: Blocking wait, timeout-based wait, non-blocking checks
+- **Message Freshness Checking**: Ensures state/mode updates are recent
 
 ## Installation
 
@@ -80,20 +87,21 @@ See `config/guard_params.yaml` for configuration options:
   ros__parameters:
     state_topic: "/robot_state"
     mode_topic: "/autonomous_mode"
-    safety_heartbeat_topic: "/safety/heartbeat"
-    warning_heartbeat_topic: "/warning/heartbeat"
     required_state: "active"
-    heartbeat_timeout: 1.0
+    update_timeout: 1.0  # Maximum age of messages in seconds
+    require_autonomous_mode: true
 ```
 
 ## Safety Conditions
 
 A guard is satisfied when **all** of the following are true:
 
-1. **State Match**: Current state equals required state (default: "active")
-2. **Mode Enabled**: Autonomous mode is enabled (default: required)
-3. **Safety Heartbeat**: Safety heartbeat is true and fresh (default: required)
-4. **Warning Heartbeat**: Warning heartbeat is true and fresh (default: required)
+1. **State Received**: Robot state message has been received
+2. **State Fresh**: State message is recent (within update_timeout)
+3. **State Match**: Current state equals required state (default: "active")
+4. **Mode Received**: Autonomous mode message has been received
+5. **Mode Fresh**: Mode message is recent (within update_timeout)
+6. **Mode Enabled**: Autonomous mode is true (if require_autonomous_mode is true)
 
 ## Usage Patterns
 

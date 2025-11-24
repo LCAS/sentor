@@ -8,8 +8,8 @@ SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node)
 
 SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
     : node_(node), options_(options),
-      last_safety_heartbeat_time_(node->get_clock()->now()),
-      last_warning_heartbeat_time_(node->get_clock()->now()) {
+      last_state_time_(node->get_clock()->now()),
+      last_mode_time_(node->get_clock()->now()) {
     
     // Create subscriptions
     state_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -20,50 +20,50 @@ SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
         options_.mode_topic, 10,
         std::bind(&SentorGuard::modeCallback, this, std::placeholders::_1));
     
-    safety_heartbeat_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
-        options_.safety_heartbeat_topic, 10,
-        std::bind(&SentorGuard::safetyHeartbeatCallback, this, std::placeholders::_1));
-    
-    warning_heartbeat_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
-        options_.warning_heartbeat_topic, 10,
-        std::bind(&SentorGuard::warningHeartbeatCallback, this, std::placeholders::_1));
-    
     RCLCPP_INFO(node_->get_logger(),
-        "SentorGuard initialized: required_state='%s', heartbeat_timeout=%ldms",
-        options_.required_state.c_str(), options_.heartbeat_timeout.count());
+        "SentorGuard initialized: required_state='%s', update_timeout=%ldms",
+        options_.required_state.c_str(), options_.update_timeout.count());
 }
 
 void SentorGuard::stateCallback(const std_msgs::msg::String::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(mutex_);
     current_state_ = msg->data;
+    last_state_time_ = node_->get_clock()->now();
     checkConditions();
 }
 
 void SentorGuard::modeCallback(const std_msgs::msg::Bool::SharedPtr msg) {
     std::lock_guard<std::mutex> lock(mutex_);
     autonomous_mode_ = msg->data;
-    checkConditions();
-}
-
-void SentorGuard::safetyHeartbeatCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    safety_heartbeat_ = msg->data;
-    last_safety_heartbeat_time_ = node_->get_clock()->now();
-    checkConditions();
-}
-
-void SentorGuard::warningHeartbeatCallback(const std_msgs::msg::Bool::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    warning_heartbeat_ = msg->data;
-    last_warning_heartbeat_time_ = node_->get_clock()->now();
+    last_mode_time_ = node_->get_clock()->now();
     checkConditions();
 }
 
 void SentorGuard::checkConditions() {
     auto now = node_->get_clock()->now();
     
-    // Check state
+    // Check if we have received state message
+    if (current_state_.empty()) {
+        condition_met_ = false;
+        return;
+    }
+    
+    // Check if state message is recent
+    auto state_age = now - last_state_time_;
+    if (state_age > rclcpp::Duration(options_.update_timeout)) {
+        condition_met_ = false;
+        return;
+    }
+    
+    // Check state value
     if (current_state_ != options_.required_state) {
+        condition_met_ = false;
+        return;
+    }
+    
+    // Check if mode message is recent
+    auto mode_age = now - last_mode_time_;
+    if (mode_age > rclcpp::Duration(options_.update_timeout)) {
         condition_met_ = false;
         return;
     }
@@ -72,34 +72,6 @@ void SentorGuard::checkConditions() {
     if (options_.require_autonomous_mode && !autonomous_mode_) {
         condition_met_ = false;
         return;
-    }
-    
-    // Check safety heartbeat
-    if (options_.require_safety_heartbeat) {
-        if (!safety_heartbeat_) {
-            condition_met_ = false;
-            return;
-        }
-        
-        auto age = now - last_safety_heartbeat_time_;
-        if (age > rclcpp::Duration(options_.heartbeat_timeout)) {
-            condition_met_ = false;
-            return;
-        }
-    }
-    
-    // Check warning heartbeat
-    if (options_.require_warning_heartbeat) {
-        if (!warning_heartbeat_) {
-            condition_met_ = false;
-            return;
-        }
-        
-        auto age = now - last_warning_heartbeat_time_;
-        if (age > rclcpp::Duration(options_.heartbeat_timeout)) {
-            condition_met_ = false;
-            return;
-        }
     }
     
     // All conditions met
@@ -121,34 +93,28 @@ std::string SentorGuard::getBlockingReason() const {
     std::lock_guard<std::mutex> lock(mutex_);
     auto now = node_->get_clock()->now();
     
+    // Check state
+    if (current_state_.empty()) {
+        return "Robot state not received";
+    }
+    
+    auto state_age = now - last_state_time_;
+    if (state_age > rclcpp::Duration(options_.update_timeout)) {
+        return "Robot state stale (" + std::to_string(state_age.seconds()) + "s old)";
+    }
+    
     if (current_state_ != options_.required_state) {
         return "State is '" + current_state_ + "', required '" + options_.required_state + "'";
     }
     
+    // Check mode
+    auto mode_age = now - last_mode_time_;
+    if (mode_age > rclcpp::Duration(options_.update_timeout)) {
+        return "Autonomous mode stale (" + std::to_string(mode_age.seconds()) + "s old)";
+    }
+    
     if (options_.require_autonomous_mode && !autonomous_mode_) {
         return "Autonomous mode is disabled";
-    }
-    
-    if (options_.require_safety_heartbeat) {
-        if (!safety_heartbeat_) {
-            return "Safety heartbeat is unhealthy or not received";
-        }
-        
-        auto age = now - last_safety_heartbeat_time_;
-        if (age > rclcpp::Duration(options_.heartbeat_timeout)) {
-            return "Safety heartbeat stale (" + std::to_string(age.seconds()) + "s old)";
-        }
-    }
-    
-    if (options_.require_warning_heartbeat) {
-        if (!warning_heartbeat_) {
-            return "Warning heartbeat is unhealthy or not received";
-        }
-        
-        auto age = now - last_warning_heartbeat_time_;
-        if (age > rclcpp::Duration(options_.heartbeat_timeout)) {
-            return "Warning heartbeat stale (" + std::to_string(age.seconds()) + "s old)";
-        }
     }
     
     return "Unknown reason";

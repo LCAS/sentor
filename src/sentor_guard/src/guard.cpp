@@ -1,5 +1,5 @@
 #include "sentor_guard/guard.hpp"
-#include "sentor_guard/msg/guard_status.hpp"
+#include "sentor_msgs/msg/guard_status.hpp"
 #include <sstream>
 
 namespace sentor_guard {
@@ -23,7 +23,7 @@ SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
         std::bind(&SentorGuard::modeCallback, this, std::placeholders::_1));
     
     // Create publisher for blocking status
-    status_publisher_ = node_->create_publisher<sentor_guard::msg::GuardStatus>(
+    status_publisher_ = node_->create_publisher<sentor_msgs::msg::GuardStatus>(
         "/sentor_guard/blocking_reason", 10);
     
     RCLCPP_INFO(node_->get_logger(),
@@ -170,7 +170,7 @@ void SentorGuard::publishBlockingStatus(bool is_blocking, const std::vector<std:
     }
     
     try {
-        sentor_guard::msg::GuardStatus msg;
+        sentor_msgs::msg::GuardStatus msg;
         msg.node_name = node_->get_name();
         msg.is_blocking = is_blocking;
         

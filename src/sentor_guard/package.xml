@@ -17,6 +17,7 @@
   <depend>rclcpp</depend>
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
+  <depend>sentor_msgs</depend>
   <depend>lifecycle_msgs</depend>
   <depend>builtin_interfaces</depend>
   <depend>sentor</depend>

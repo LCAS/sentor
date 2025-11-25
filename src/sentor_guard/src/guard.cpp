@@ -1,6 +1,6 @@
 #include "sentor_guard/guard.hpp"
 #include "sentor_guard/msg/guard_status.hpp"
-#include <rclcpp/serialization.hpp>
+#include <sstream>
 
 namespace sentor_guard {
 
@@ -23,7 +23,7 @@ SentorGuard::SentorGuard(rclcpp::Node::SharedPtr node, const Options& options)
         std::bind(&SentorGuard::modeCallback, this, std::placeholders::_1));
     
     // Create publisher for blocking status
-    status_publisher_ = node_->create_publisher<rclcpp::SerializedMessage>(
+    status_publisher_ = node_->create_publisher<sentor_guard::msg::GuardStatus>(
         "/sentor_guard/blocking_reason", 10);
     
     RCLCPP_INFO(node_->get_logger(),
@@ -195,11 +195,7 @@ void SentorGuard::publishBlockingStatus(bool is_blocking, const std::vector<std:
             }
         }
         
-        // Serialize and publish
-        rclcpp::Serialization<sentor_guard::msg::GuardStatus> serializer;
-        rclcpp::SerializedMessage serialized_msg;
-        serializer.serialize_message(&msg, &serialized_msg);
-        status_publisher_->publish(serialized_msg);
+        status_publisher_->publish(msg);
         
     } catch (const std::exception& e) {
         RCLCPP_WARN(node_->get_logger(), "Failed to publish blocking status: %s", e.what());

@@ -4,6 +4,7 @@ import unittest
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Bool
+from sentor_msgs.msg import GuardStatus
 from sentor_guard import SentorGuard, AutonomyGuardException, sentor_guarded
 import time
 
@@ -101,16 +102,20 @@ class TestSentorGuardDecorator(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.node = Node('test_decorator_node')
-        self.guard = SentorGuard(self.node, heartbeat_timeout=0.5)
+        self.guard = SentorGuard(self.node, update_timeout=0.5)
         
         # Create test publishers
         self.state_pub = self.node.create_publisher(String, '/robot_state', 10)
         self.mode_pub = self.node.create_publisher(Bool, '/autonomous_mode', 10)
-        self.safety_pub = self.node.create_publisher(Bool, '/safety/heartbeat', 10)
-        self.warning_pub = self.node.create_publisher(Bool, '/warning/heartbeat', 10)
         
+        self.blocking_reason_sub = self.node.create_subscription(GuardStatus, '/sentor_guard/blocking_reason', self.blocking_reason_callback, 10)
         time.sleep(0.1)  # Allow subscriptions to connect
     
+    def blocking_reason_callback(self, msg):
+        """Callback to receive blocking reason messages."""
+
+        print(f"Blocking reason received: {msg}")
+
     def tearDown(self):
         """Clean up test fixtures."""
         self.node.destroy_node()
@@ -126,7 +131,7 @@ class TestSentorGuardDecorator(unittest.TestCase):
         self.mode_pub.publish(mode_msg)
         
         # Spin to process messages
-        for _ in range(3):
+        for _ in range(5):
             rclpy.spin_once(self.node, timeout_sec=0.1)
     
     def test_decorator_with_timeout_blocks(self):

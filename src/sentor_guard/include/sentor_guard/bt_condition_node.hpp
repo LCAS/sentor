@@ -81,7 +81,9 @@ inline std::unique_ptr<BT::TreeNode> CheckAutonomyAllowedFactory(
   const BT::NodeConfiguration & config)
 {
   rclcpp::Node::SharedPtr node;
-  config.blackboard->get("node", node);
+  if (!config.blackboard->get("node", node)) {
+    throw std::runtime_error("Failed to get 'node' from blackboard");
+  }
   
   if (!node) {
     throw BT::RuntimeError("CheckAutonomyAllowed requires a ROS2 node in blackboard");

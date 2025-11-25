@@ -83,8 +83,7 @@ class SentorGuard:
             10
         )
         
-        # Publisher for blocking status
-        # Import message type dynamically to avoid circular dependencies
+        # Publisher for blocking status using GuardStatus message
         try:
             from sentor_guard.msg import GuardStatus
             self._status_publisher = node.create_publisher(
@@ -92,11 +91,13 @@ class SentorGuard:
                 '/sentor_guard/blocking_reason',
                 10
             )
+            self._GuardStatus = GuardStatus
         except ImportError:
             self.node.get_logger().warn(
                 "GuardStatus message not available - blocking status will not be published"
             )
             self._status_publisher = None
+            self._GuardStatus = None
         
         self.node.get_logger().info(
             f"SentorGuard initialized: required_state='{required_state}', "
@@ -209,14 +210,13 @@ class SentorGuard:
             is_blocking: True if guard is blocking, False if it just passed
             call_stack: List of call stack frames (optional)
         """
-        if self._status_publisher is None:
+        if self._status_publisher is None or self._GuardStatus is None:
             return
         
         try:
-            from sentor_guard.msg import GuardStatus
             from builtin_interfaces.msg import Time as TimeMsg
             
-            msg = GuardStatus()
+            msg = self._GuardStatus()
             msg.node_name = self.node.get_name()
             msg.is_blocking = is_blocking
             

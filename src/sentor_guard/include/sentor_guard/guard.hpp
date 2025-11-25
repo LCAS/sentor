@@ -11,9 +11,7 @@
 #include <vector>
 #include <execinfo.h>
 #include <cxxabi.h>
-
-// Forward declare the generated message type
-namespace sentor_guard { namespace msg { class GuardStatus; } }
+#include "sentor_msgs/msg/guard_status.hpp"
 
 namespace sentor_guard {
 
@@ -129,7 +127,7 @@ private:
     
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr mode_sub_;
-    rclcpp::Publisher<sentor_guard::msg::GuardStatus>::SharedPtr status_publisher_;
+    rclcpp::Publisher<sentor_msgs::msg::GuardStatus>::SharedPtr status_publisher_;
     
     mutable std::mutex mutex_;
     std::condition_variable cv_;

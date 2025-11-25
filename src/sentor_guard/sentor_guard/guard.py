@@ -85,7 +85,7 @@ class SentorGuard:
         
         # Publisher for blocking status using GuardStatus message
         try:
-            from sentor_guard.msg import GuardStatus
+            from sentor_msgs.msg import GuardStatus
             self._status_publisher = node.create_publisher(
                 GuardStatus,
                 '/sentor_guard/blocking_reason',

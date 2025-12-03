@@ -1,0 +1,61 @@
+<!--
+  Example Nav2 Behavior Tree with sentor_guard condition checking.
+  
+  This behavior tree demonstrates how to integrate sentor_guard with Nav2
+  navigation. The CheckAutonomyAllowed condition node continuously monitors
+  safety conditions and only allows navigation when all conditions are met.
+  
+  Key features:
+  - Checks robot state and autonomous mode before navigation
+  - Navigation pauses automatically when conditions are not met
+  - Resumes navigation when conditions are satisfied
+  - Provides graceful degradation instead of abrupt failures
+  
+  To use this behavior tree:
+  1. Ensure sentor_guard package is built and sourced
+  2. Load this XML file in your Nav2 configuration
+  3. Make sure the sentor_guard BT plugin is in your bt_navigator plugin path
+-->
+<root BTCPP_format="4">
+  <BehaviorTree ID="NavigateWithGuard">
+    <PipelineSequence name="NavigateWithRecovery">
+      
+      <!-- Check if autonomy is allowed before proceeding -->
+      <CheckAutonomyAllowed 
+        name="CheckSafetyConditions"
+        state_topic="/robot_state"
+        mode_topic="/autonomous_mode"
+        required_state="active"
+        update_timeout="1000"
+        require_autonomous_mode="true"/>
+      
+      <!-- If conditions are met, proceed with navigation -->
+      <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+        <PipelineSequence name="NavigateWithReplanning">
+          <RateController hz="1.0">
+            <!-- Continuously check safety during navigation -->
+            <CheckAutonomyAllowed 
+              name="MonitorSafetyDuringNav"
+              required_state="active"/>
+          </RateController>
+          
+          <!-- Standard Nav2 navigation actions -->
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+        </PipelineSequence>
+        
+        <!-- Recovery behaviors if navigation fails -->
+        <ReactiveFallback name="RecoveryActions">
+          <GoalUpdated/>
+          <Sequence>
+            <ClearEntireCostmap name="ClearGlobalCostmap" service_name="global_costmap/clear_entirely_global_costmap"/>
+            <ClearEntireCostmap name="ClearLocalCostmap" service_name="local_costmap/clear_entirely_local_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5.0"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </ReactiveFallback>
+      </RecoveryNode>
+    </PipelineSequence>
+  </BehaviorTree>
+</root>

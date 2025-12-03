@@ -17,6 +17,11 @@ function add_git_config_if_not_exist {
 
 add_config_if_not_exist "source /opt/ros/$ROS_DISTRO/setup.bash"
 
+rosdep update --rosdistro $ROS_DISTRO
+
+sudo apt-get update && sudo apt-get upgrade --no-install-recommends -y
+rosdep install --from-paths src/ --ignore-src -r -y
+
 source /opt/ros/$ROS_DISTRO/setup.bash
 
 colcon build --symlink-install --continue-on-error || true

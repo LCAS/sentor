@@ -8,6 +8,7 @@ find_package(std_srvs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TopicMap.msg"
+  "msg/GuardStatus.msg"
   "msg/TopicMapArray.msg"
   "msg/SentorEvent.msg"
   "msg/Monitor.msg"

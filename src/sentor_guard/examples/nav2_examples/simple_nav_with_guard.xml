@@ -1,0 +1,26 @@
+<!--
+  Minimal Nav2 Behavior Tree example with sentor_guard.
+  
+  This is a simplified example showing the basic integration pattern.
+  The CheckAutonomyAllowed node is checked before navigation begins.
+  
+  For a more complete example with continuous monitoring and recovery
+  behaviors, see navigate_with_guard.xml
+-->
+<root BTCPP_format="4">
+  <BehaviorTree ID="SimpleNavigateWithGuard">
+    <Sequence name="NavigateSequence">
+      
+      <!-- Check safety conditions before starting navigation -->
+      <CheckAutonomyAllowed 
+        name="CheckBeforeNav"
+        required_state="active"
+        update_timeout="1000"/>
+      
+      <!-- If safe, compute path and follow it -->
+      <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+      <FollowPath path="{path}" controller_id="FollowPath"/>
+      
+    </Sequence>
+  </BehaviorTree>
+</root>

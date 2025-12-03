@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    # Topics to monitor from RobotStateMachine
+    state_topic: "/robot_state"
+    mode_topic: "/autonomous_mode"
+    
+    # Guard conditions
+    required_state: "active"  # One of: 'start-up', 'disabled', 'enabled', 'active'
+    update_timeout: 1.0  # Maximum age of messages in seconds
+    
+    # Which conditions to enforce
+    require_autonomous_mode: true

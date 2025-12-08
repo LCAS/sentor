@@ -219,3 +219,27 @@ ros2 run sentor test_sentor.py \
 - Killing only an autonomy-critical node flips warning beat but leaves safety unchanged.
 
 - If desired, run ros2 topic echo /safety/heartbeat and /warning/heartbeat in separate terminals to verify.
+
+
+## Runing with robot state machine
+- Start joystick package - `ros2 launch teleop_twist_joy teleop-launch.py joy_config:='xbox'`
+- Launch sentor - `ros2 launch sentor sentor_launch.py`
+- Launch state machine - `ros2 run robot_state_machine robot_state_machine_sentor`
+- Launch joy state machine node - `ros2 run robot_state_machine joy_robot_state_machine`
+- Launch ardunio bridge (on real robot) - `ros2 run robot_state_machine bridge_to_arduino`
+- Launch sentor guard - `ros2 launch sentor_guard guard_example.launch.py`
+
+Logitech buttons:
+- X button - switch to manual mode
+- Y button - switch to autonomous mode
+- LB (Left bumper) - hold for manual movement (deadman button)
+- RB (Right bumper) - enable/activate button
+
+Topics:
+- Sentor:
+  - `ros2 topic echo /safety/heartbeat`
+  - `ros2 topic echo /warning/heartbeat`
+- State Machine:
+  - `ros2 topic echo /robot_state`
+  - `ros2 topic echo /autonomous_mode`
+

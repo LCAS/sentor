@@ -220,6 +220,7 @@ ros2 run sentor test_sentor.py \
 
 - If desired, run ros2 topic echo /safety/heartbeat and /warning/heartbeat in separate terminals to verify.
 
+---
 
 ## Runing with robot state machine
 - Start joystick package - `ros2 launch teleop_twist_joy teleop-launch.py joy_config:='xbox'`

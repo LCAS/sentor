@@ -45,8 +45,8 @@ def generate_launch_description():
             parameters=[
                 LaunchConfiguration('guard_params'),
                 {
-                    'input_topic': '/nav2/cmd_vel',
-                    'output_topic': '/cmd_vel',
+                    'input_topic': '/cmd_vel',
+                    'output_topic': '/guard/cmd_vel',
                     'message_type': 'geometry_msgs/msg/Twist',
                 }
             ],

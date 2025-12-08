@@ -130,9 +130,9 @@ std::vector<std::string> SentorGuard::getTruncatedCallStack(int max_frames) {
     std::vector<std::string> result;
     
     #ifdef __GNUC__
-    void* addresses[max_frames + 5];  // Extra frames to skip
-    int size = backtrace(addresses, max_frames + 5);
-    char** symbols = backtrace_symbols(addresses, size);
+    std::vector<void*> addresses(max_frames + 5);  // Extra frames to skip
+    int size = backtrace(addresses.data(), static_cast<int>(addresses.size()));
+    char** symbols = backtrace_symbols(addresses.data(), size);
     
     // Skip first 3 frames (this function and guard methods)
     for (int i = 3; i < std::min(size, max_frames + 3); ++i) {
